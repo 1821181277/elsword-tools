@@ -1,0 +1,64 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="theme-color" content="#070a10">
+<title>小工具集合</title>
+<style>
+:root{
+  --bg:#070a10; --panel:#10151f; --line:rgba(255,255,255,.09);
+  --txt:#e9edf6; --muted:#8d97a9; --cyan:#46d5ef; --gold:#f0c46a;
+}
+*{box-sizing:border-box}
+body{
+  margin:0;min-height:100vh;background:
+    radial-gradient(900px 500px at 15% -10%, rgba(70,213,239,.10), transparent 60%),
+    radial-gradient(700px 400px at 95% 10%, rgba(240,196,106,.07), transparent 60%),
+    var(--bg);
+  color:var(--txt);
+  font-family:-apple-system,BlinkMacSystemFont,"PingFang SC","Hiragino Sans GB","Microsoft YaHei",sans-serif;
+  display:flex;flex-direction:column;align-items:center;
+  padding:clamp(40px,10vh,120px) 20px 60px;
+}
+header{width:100%;max-width:760px;margin-bottom:34px}
+.eyebrow{font-size:12px;letter-spacing:.22em;text-transform:uppercase;color:var(--cyan);opacity:.85}
+h1{font-size:clamp(26px,4vw,40px);margin:10px 0 8px;font-weight:650;letter-spacing:.02em}
+p.sub{margin:0;color:var(--muted);font-size:14px;line-height:1.7}
+.grid{width:100%;max-width:760px;display:grid;gap:14px}
+a.card{
+  display:block;padding:22px 22px 20px;border-radius:18px;text-decoration:none;color:inherit;
+  background:linear-gradient(180deg,rgba(255,255,255,.035),rgba(255,255,255,.012));
+  border:1px solid var(--line);
+  transition:transform .18s ease, border-color .18s ease, background .18s ease;
+}
+a.card:hover{transform:translateY(-2px);border-color:rgba(70,213,239,.45);background:linear-gradient(180deg,rgba(70,213,239,.07),rgba(255,255,255,.012))}
+.card h2{margin:0 0 8px;font-size:18px;font-weight:600;display:flex;align-items:center;gap:10px}
+.tag{font-size:11px;padding:3px 8px;border-radius:999px;border:1px solid var(--line);color:var(--muted);font-weight:400}
+.card p{margin:0;color:var(--muted);font-size:13.5px;line-height:1.65}
+.dot{width:7px;height:7px;border-radius:50%;background:var(--cyan);box-shadow:0 0 12px rgba(70,213,239,.8)}
+.dot.gold{background:var(--gold);box-shadow:0 0 12px rgba(240,196,106,.7)}
+footer{margin-top:38px;color:#5d6677;font-size:12px}
+</style>
+</head>
+<body>
+<header>
+  <div class="eyebrow">Tools</div>
+  <h1>小工具集合</h1>
+  <p class="sub">两个纯前端的计算器，所有计算都在浏览器里跑，不上传任何数据</p>
+</header>
+
+<div class="grid">
+  <a class="card" href="./nebcalc/">
+    <h2><span class="dot"></span>内布隆防具 · 变换成本计算器<span class="tag">概率 / 花费</span></h2>
+    <p>按词条概率与评分规则，算冲到目标分数要多少次、花多少钱，附尝试次数分布</p>
+  </a>
+  <a class="card" href="./circuit-planner/">
+    <h2><span class="dot gold"></span>演算 · 电路配置模拟器<span class="tag">配置 / 模拟</span></h2>
+    <p>电路配置与演算模拟</p>
+  </a>
+</div>
+
+<footer>静态页面 · 无后端 · 无追踪</footer>
+</body>
+</html>

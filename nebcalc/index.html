@@ -1,0 +1,1038 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="theme-color" content="#070a10">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%230b111a'/%3E%3Cpath d='M16 5l9 8-9 14L7 13z' fill='%2346d5ef' opacity='.9'/%3E%3C/svg%3E">
+<title>内布隆防具 · 变换成本计算器</title>
+<meta name="description" content="按内布隆防具变换模拟器的词条概率与评分规则，精确计算达到目标分数的期望尝试次数与人民币花费，并给出尝试次数分布。">
+<style>
+:root{
+  --bg:#070a10;
+  --panel:#10151f;
+  --panel-2:#0b0f17;
+  --line:rgba(255,255,255,.075);
+  --line-strong:rgba(255,255,255,.14);
+  --txt:#e9edf6;
+  --muted:#a2abbd;
+  --dim:#7d879b;
+  --cyan:#46d5ef;
+  --cyan-dim:rgba(70,213,239,.14);
+  --gold:#f0c46a;
+  --gold-dim:rgba(240,196,106,.12);
+  --red:#ff9d9d;
+  --radius:20px;
+}
+*,*::before,*::after{box-sizing:border-box}
+html{color-scheme:dark}
+body{
+  margin:0;
+  min-height:100vh;
+  font-family:-apple-system,BlinkMacSystemFont,"PingFang SC","Hiragino Sans GB","Microsoft YaHei","Noto Sans SC",sans-serif;
+  color:var(--txt);
+  background:
+    radial-gradient(900px 620px at 8% -12%, rgba(70,213,239,.13), transparent 62%),
+    radial-gradient(760px 560px at 102% -4%, rgba(167,139,250,.10), transparent 58%),
+    radial-gradient(900px 700px at 60% 110%, rgba(240,196,106,.05), transparent 60%),
+    var(--bg);
+  -webkit-font-smoothing:antialiased;
+  text-rendering:optimizeLegibility;
+}
+a{color:inherit}
+button{font:inherit}
+
+/* ---------- masthead ---------- */
+.masthead{
+  max-width:1240px;margin:0 auto;padding:36px 24px 6px;
+  display:flex;align-items:flex-start;justify-content:space-between;gap:20px;
+  animation:rise .55s ease both;
+}
+.brand{display:flex;align-items:center;gap:16px;min-width:0}
+.armor{
+  width:58px;height:58px;flex:0 0 auto;border-radius:14px;object-fit:cover;
+  border:1px solid rgba(70,213,239,.38);background:#0a1019;
+  box-shadow:0 0 0 4px rgba(70,213,239,.06),0 14px 34px rgba(0,0,0,.5);
+  image-rendering:pixelated;
+}
+.eyebrow{font-size:10.5px;letter-spacing:.24em;color:var(--cyan);text-transform:uppercase;margin-bottom:5px;font-weight:600}
+.mbr{display:none}
+h1{font-size:clamp(23px,2.6vw,31px);line-height:1.16;margin:0 0 7px;letter-spacing:.01em;font-weight:750}
+.sub{margin:0;font-size:12.5px;color:var(--muted);line-height:1.6}
+.actions{display:flex;gap:8px;flex-wrap:wrap;justify-content:flex-end;padding-top:6px}
+.actions a{
+  font-size:11.5px;color:var(--muted);text-decoration:none;white-space:nowrap;
+  border:1px solid var(--line);background:rgba(255,255,255,.025);
+  padding:8px 13px;border-radius:999px;transition:color .16s,border-color .16s,background .16s;
+}
+.actions a:hover{color:#fff;border-color:rgba(70,213,239,.35);background:rgba(70,213,239,.08)}
+
+/* ---------- layout ---------- */
+.layout{
+  max-width:1240px;margin:22px auto 64px;padding:0 24px;
+  display:grid;grid-template-columns:372px minmax(0,1fr);gap:18px;align-items:start;
+}
+.panel{
+  background:linear-gradient(180deg,rgba(255,255,255,.04),rgba(255,255,255,.012));
+  border:1px solid var(--line);border-radius:var(--radius);
+  box-shadow:0 26px 50px -30px rgba(0,0,0,.85),inset 0 1px 0 rgba(255,255,255,.05);
+  animation:rise .55s ease both;
+}
+.side{padding:20px 20px 18px}
+.charts{display:grid;gap:18px;min-width:0}
+.charts .panel:nth-child(1){animation-delay:.06s}
+.charts .panel:nth-child(2){animation-delay:.12s}
+.table-panel{grid-column:1/-1;animation-delay:.16s;overflow:hidden}
+.notes-panel{grid-column:1/-1;padding:20px 24px;display:grid;gap:15px;animation-delay:.2s}
+
+/* ---------- controls ---------- */
+.control{margin-bottom:17px}
+.control-head{display:flex;justify-content:space-between;align-items:baseline;gap:10px;margin-bottom:8px}
+.control-head label,.control-head .label{font-size:12px;font-weight:650;color:#ccd5e5;letter-spacing:.02em;display:flex;align-items:center;gap:6px}
+.stone{width:17px;height:17px;border-radius:4px;image-rendering:pixelated;opacity:.9}
+.hint{font-size:10.5px;color:var(--dim);white-space:nowrap}
+.input-wrap{
+  display:flex;align-items:center;gap:8px;height:46px;padding:0 13px;
+  background:#080c13;border:1px solid var(--line);border-radius:12px;
+  transition:border-color .16s,box-shadow .16s;
+}
+.input-wrap:focus-within{border-color:rgba(70,213,239,.6);box-shadow:0 0 0 3px rgba(70,213,239,.12)}
+.input-wrap input{
+  flex:1 1 auto;min-width:0;width:100%;padding:0;border:0;outline:0;background:none;
+  color:var(--txt);font-size:19px;font-weight:650;font-variant-numeric:tabular-nums;
+  appearance:textfield;-moz-appearance:textfield;
+}
+.input-wrap input::-webkit-outer-spin-button,
+.input-wrap input::-webkit-inner-spin-button{-webkit-appearance:none;margin:0}
+.input-wrap .prefix{color:var(--gold);font-size:15px;font-weight:650}
+.input-wrap .unit{color:var(--dim);font-size:11.5px;white-space:nowrap}
+input[type=range]{
+  width:100%;margin:13px 0 1px;appearance:none;-webkit-appearance:none;background:transparent;cursor:pointer;
+}
+input[type=range]::-webkit-slider-runnable-track{
+  height:4px;border-radius:99px;
+  background:linear-gradient(90deg,var(--cyan) 0 var(--fill,40%),rgba(255,255,255,.12) var(--fill,40%) 100%);
+}
+input[type=range]::-webkit-slider-thumb{
+  -webkit-appearance:none;width:16px;height:16px;margin-top:-6px;border-radius:50%;
+  background:#e9fcff;border:2px solid #06121a;box-shadow:0 0 0 4px rgba(70,213,239,.16);
+}
+input[type=range]::-moz-range-track{height:4px;border-radius:99px;background:rgba(255,255,255,.12)}
+input[type=range]::-moz-range-progress{height:4px;border-radius:99px;background:var(--cyan)}
+input[type=range]::-moz-range-thumb{width:14px;height:14px;border-radius:50%;background:#e9fcff;border:2px solid #06121a;box-shadow:0 0 0 4px rgba(70,213,239,.16)}
+input[type=range]:focus-visible{outline:2px solid var(--cyan);outline-offset:6px;border-radius:8px}
+.presets{display:flex;gap:6px;margin-top:9px;flex-wrap:wrap}
+.preset{
+  border:1px solid var(--line);background:rgba(255,255,255,.03);color:var(--muted);
+  font-size:11px;padding:5px 10px;border-radius:8px;cursor:pointer;
+  transition:all .15s;font-variant-numeric:tabular-nums;
+}
+.preset:hover{color:#fff;border-color:var(--line-strong);background:rgba(255,255,255,.06)}
+.preset.active{color:#161006;background:var(--gold);border-color:var(--gold);font-weight:700}
+.preset:focus-visible,.actions a:focus-visible,summary:focus-visible,.footer a:focus-visible{outline:2px solid var(--cyan);outline-offset:2px;border-radius:7px}
+.seg{display:grid;grid-template-columns:repeat(5,1fr);gap:4px;padding:4px;background:#080c13;border:1px solid var(--line);border-radius:12px}
+.seg input{position:absolute;opacity:0;width:1px;height:1px;pointer-events:none}
+.seg label{
+  text-align:center;padding:8px 0;border-radius:8px;font-size:12px;font-weight:650;
+  color:var(--muted);cursor:pointer;transition:background .15s,color .15s,box-shadow .15s;user-select:none;
+}
+.seg label:hover{color:#e6f7ff;background:rgba(255,255,255,.035)}
+.seg input:checked+label{
+  color:#d9f8ff;background:linear-gradient(180deg,rgba(70,213,239,.24),rgba(70,213,239,.08));
+  box-shadow:inset 0 0 0 1px rgba(70,213,239,.38);
+}
+.seg input:focus-visible+label{outline:2px solid var(--cyan);outline-offset:2px}
+
+/* ---------- result ---------- */
+.result{margin-top:4px;padding-top:17px;border-top:1px solid var(--line)}
+.result-label{font-size:10.5px;letter-spacing:.16em;color:var(--dim);font-weight:600}
+.result-cost{
+  font-size:clamp(32px,3.4vw,40px);font-weight:750;line-height:1.08;letter-spacing:-.01em;
+  margin:7px 0 4px;font-variant-numeric:tabular-nums;
+  background:linear-gradient(92deg,#ffe6b0,#f0b95c 58%,#dc9b36);
+  -webkit-background-clip:text;background-clip:text;color:transparent;
+}
+.result-sub{font-size:11.5px;color:var(--muted);line-height:1.5}
+.result-sub b{color:#dfe7f4;font-weight:600;font-variant-numeric:tabular-nums}
+.result-grid{display:grid;grid-template-columns:1fr 1fr;gap:9px;margin-top:15px}
+.result-grid>div{background:rgba(255,255,255,.035);border:1px solid rgba(255,255,255,.055);border-radius:11px;padding:9px 11px}
+.result-grid span{display:block;font-size:10.5px;color:var(--dim);margin-bottom:3px}
+.result-grid strong{font-size:19px;font-weight:650;color:#eef4fd;font-variant-numeric:tabular-nums;letter-spacing:-.01em}
+.quantiles{margin-top:13px;display:grid}
+.q{display:grid;grid-template-columns:64px 1fr auto;gap:8px;align-items:baseline;padding:7px 2px;border-bottom:1px dashed rgba(255,255,255,.065);font-size:11.5px}
+.q:last-child{border-bottom:0;padding-bottom:0}
+.q-label{color:var(--dim)}
+.qn{color:#d7dfec;font-variant-numeric:tabular-nums;text-align:right}
+.qc{color:var(--gold);font-variant-numeric:tabular-nums;min-width:70px;text-align:right}
+.status{
+  display:none;margin-top:11px;padding:8px 10px;border-radius:9px;font-size:11.5px;line-height:1.5;
+  color:var(--red);background:rgba(255,90,90,.07);border:1px solid rgba(255,90,90,.18);
+}
+.status.show{display:block}
+.footnote{margin:12px 0 0;font-size:10.5px;line-height:1.65;color:var(--dim)}
+
+/* ---------- charts ---------- */
+.chart-card{padding:17px 20px 10px;min-width:0}
+.chart-card header{display:flex;align-items:flex-start;justify-content:space-between;gap:12px;margin-bottom:2px}
+.chart-card h2{font-size:14.5px;margin:0 0 4px;font-weight:650;letter-spacing:.01em}
+.chart-card .chart-sub{margin:0;font-size:11px;color:var(--dim);line-height:1.55}
+.tag{
+  flex:0 0 auto;font-size:10px;color:var(--cyan);background:rgba(70,213,239,.07);
+  border:1px solid rgba(70,213,239,.17);padding:4px 8px;border-radius:999px;white-space:nowrap;margin-top:1px;
+}
+.chart-wrap{position:relative;margin-top:4px}
+.chart{width:100%;height:252px}
+.chart svg{display:block;overflow:visible}
+.chart-empty{
+  height:252px;display:grid;place-items:center;color:var(--dim);font-size:12.5px;
+  border:1px dashed rgba(255,255,255,.08);border-radius:12px;background:rgba(255,255,255,.012);
+}
+.chart-tip{
+  position:absolute;left:0;top:0;z-index:6;pointer-events:none;opacity:0;
+  background:rgba(9,13,21,.97);border:1px solid rgba(255,255,255,.15);border-radius:10px;
+  padding:8px 11px;font-size:11px;line-height:1.62;color:#c7d1e1;white-space:nowrap;
+  box-shadow:0 16px 34px rgba(0,0,0,.6);
+  transform:translate(-50%,-112%);transition:opacity .1s;
+}
+.chart-tip.show{opacity:1}
+.chart-tip.below{transform:translate(-50%,16px)}
+.chart-tip b{color:#fff;font-variant-numeric:tabular-nums;font-weight:600}
+.chart-tip .g{color:var(--gold)}
+
+/* ---------- table ---------- */
+.section-head{padding:2px 16px 2px;display:flex;align-items:flex-end;justify-content:space-between;gap:18px;margin-bottom:10px;flex-wrap:wrap}
+.section-head h2{font-size:17px;margin:0 0 5px;font-weight:700;letter-spacing:.01em}
+.section-head p{margin:0;font-size:11.5px;color:var(--dim);line-height:1.6;max-width:720px}
+.legend{font-size:10.5px;color:var(--dim);display:flex;gap:12px;flex-wrap:wrap;padding-bottom:2px}
+.legend span{display:inline-flex;align-items:center;gap:5px}
+.dot{width:7px;height:7px;border-radius:50%;display:inline-block}
+.dot.enh{background:var(--gold)}
+.dot.zero{background:#ff9d9d;opacity:.8}
+.table-scroll{overflow-x:auto;padding:0 10px 8px;scrollbar-width:thin}
+.table-scroll:focus-visible{outline:2px solid var(--cyan);outline-offset:-2px;border-radius:12px}
+table{width:100%;border-collapse:collapse;min-width:900px}
+thead th{
+  font-size:10.5px;letter-spacing:.05em;color:var(--dim);font-weight:600;text-align:left;
+  padding:10px 12px;border-bottom:1px solid var(--line);white-space:nowrap;vertical-align:bottom;
+}
+thead th .th-sub{display:block;font-size:9.5px;color:#7b879c;letter-spacing:0;font-weight:500;margin-top:2px}
+thead th.num{text-align:right}
+tbody td{padding:11px 12px;border-bottom:1px solid rgba(255,255,255,.045);vertical-align:top}
+tbody tr:last-child td{border-bottom:0}
+tbody tr:hover td{background:rgba(255,255,255,.016)}
+.group-row th{
+  padding:17px 12px 5px;font-size:10.5px;letter-spacing:.1em;color:var(--cyan);
+  font-weight:650;border-bottom:0;text-align:left;background:transparent;
+}
+.group-row.zero th{color:#c99f9f}
+.ename{font-size:12.5px;line-height:1.5;color:#e9eff9;max-width:260px}
+.ename .orig{display:block;font-size:10px;color:#5f6a7e;margin-top:2px;letter-spacing:.02em}
+.badge{display:inline-block;font-size:9px;padding:2px 6px;border-radius:5px;margin-top:6px;margin-right:4px;border:1px solid;letter-spacing:.04em;line-height:1.4}
+.badge.enh{color:#ffd88c;border-color:rgba(240,196,106,.26);background:rgba(240,196,106,.07)}
+.badge.zero{color:#ff9d9d;border-color:rgba(255,120,120,.22);background:rgba(255,120,120,.06)}
+.badge.part{color:#c4b1ff;border-color:rgba(167,139,250,.24);background:rgba(167,139,250,.07)}
+td.num{text-align:right;font-variant-numeric:tabular-nums;font-size:12px;color:#cdd7e7;white-space:nowrap}
+td.num .small{display:block;font-size:9.5px;color:#7b879c;margin-top:2px}
+.chips{display:flex;flex-wrap:wrap;gap:5px;max-width:640px}
+.chips-cell::before{content:none}
+.chip{
+  display:inline-flex;align-items:baseline;gap:4px;padding:3px 7px;border-radius:7px;
+  background:rgba(255,255,255,.035);border:1px solid rgba(255,255,255,.06);
+  font-size:10.5px;font-variant-numeric:tabular-nums;line-height:1.5;
+}
+.chip b{color:#e3ebf7;font-weight:600}
+.chip .arr{color:#5c687c;font-size:8.5px}
+.chip em{color:var(--gold);font-style:normal;font-weight:650}
+.chip.enh em{color:#ffd88c}
+.chip.zero{opacity:.8}
+.chip.zero em{color:#a9b2c2}
+.table-note{padding:8px 16px 4px;font-size:10.5px;color:var(--dim);line-height:1.6}
+.table-note b{color:#b9c4d6;font-weight:600}
+
+/* ---------- notes ---------- */
+.callout{
+  background:linear-gradient(180deg,rgba(240,196,106,.075),rgba(240,196,106,.02));
+  border:1px solid rgba(240,196,106,.19);border-radius:14px;padding:15px 17px;
+}
+.callout-title{display:flex;gap:8px;align-items:center;font-weight:650;color:#ffdca2;font-size:12.5px;margin-bottom:7px}
+.callout-title .ico{
+  width:18px;height:18px;border-radius:50%;display:grid;place-items:center;flex:0 0 auto;
+  background:rgba(240,196,106,.18);color:#ffd88c;font-size:11px;font-weight:800;
+}
+.callout p,.callout li{font-size:12px;line-height:1.8;color:#ccd4e2;max-width:940px}
+.callout p{margin:0}
+.callout ul{margin:6px 0 0;padding-left:17px}
+.callout li{margin:4px 0}
+.callout b{color:#fff;font-weight:650}
+details{border-top:1px solid var(--line);padding-top:13px}
+summary{
+  cursor:pointer;font-size:12.5px;color:#d7deeb;font-weight:600;list-style:none;
+  display:flex;justify-content:space-between;align-items:center;gap:12px;
+}
+summary::-webkit-details-marker{display:none}
+summary::after{content:"+";color:var(--dim);font-size:16px;line-height:1}
+details[open] summary::after{content:"–"}
+.prose{margin-top:9px;color:var(--muted);font-size:11.8px;line-height:1.85;max-width:960px}
+.prose p{margin:6px 0}
+.prose b{color:#dde5f1;font-weight:600}
+.prose a{color:var(--cyan);text-decoration:none;border-bottom:1px solid rgba(70,213,239,.3)}
+.prose a:hover{border-bottom-color:var(--cyan)}
+
+/* ---------- footer ---------- */
+.footer{
+  max-width:1240px;margin:0 auto;padding:0 24px 46px;color:#7a8498;font-size:10.5px;
+  display:flex;justify-content:space-between;gap:14px;flex-wrap:wrap;line-height:1.7;
+}
+.footer a{color:#7d879b;text-decoration:none;border-bottom:1px solid rgba(255,255,255,.12)}
+.footer a:hover{color:var(--cyan)}
+
+@keyframes rise{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:none}}
+@media (prefers-reduced-motion:reduce){*,*::before,*::after{animation:none!important;transition:none!important}}
+@media (max-width:1000px){
+  .layout{grid-template-columns:1fr}
+  .masthead{flex-direction:column;align-items:stretch}
+  .actions{justify-content:flex-start;padding-top:2px}
+  .table-panel,.notes-panel{grid-column:auto}
+}
+@media (max-width:760px){
+  .table-scroll{overflow:visible;padding:0 12px 10px}
+  .table-scroll table{min-width:0;width:100%}
+  thead{display:none}
+  tbody{display:block}
+  tbody tr{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:7px 10px;padding:12px 13px 13px;margin-bottom:10px;border:1px solid var(--line);border-radius:12px;background:rgba(255,255,255,.022)}
+  tbody tr:hover td{background:transparent}
+  tbody td{border:0;padding:0;display:block}
+  tbody td:first-child{grid-column:1/-1;margin-bottom:1px}
+  tbody td.num{text-align:left;font-size:11.5px;color:#c3cedf}
+  tbody td.num::before{content:attr(data-label);display:block;font-size:9.5px;color:var(--dim);margin-bottom:1px}
+  tbody td.chips-cell{grid-column:1/-1;margin-top:5px}
+  tbody td.chips-cell::before{content:attr(data-label);display:block;font-size:9.5px;color:var(--dim);margin-bottom:5px}
+  .chips{max-width:none}
+  .group-row{display:block!important;margin:0;padding:15px 4px 2px;border:0;background:transparent}
+  .group-row th{display:block;padding:0;border:0}
+  tbody tr:last-child{margin-bottom:0}
+}
+@media (max-width:600px){
+  .masthead{padding:24px 15px 4px}
+  .mbr{display:block}
+  .sep{display:none}
+  .layout{padding:0 15px;margin-top:16px;gap:14px}
+  .panel{border-radius:16px}
+  .side{padding:17px 16px}
+  .chart-card{padding:15px 14px 8px}
+  .chart,.chart-empty{height:228px}
+  .section-head{padding:0 12px}
+  .result-cost{font-size:34px}
+  .table-scroll{padding:0 6px 8px}
+  .notes-panel{padding:17px 16px}
+}
+</style>
+</head>
+<body>
+
+<header class="masthead">
+  <div class="brand">
+    <img class="armor" src="data:image/webp;base64,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" alt="内布隆防具图标" width="58" height="58">
+    <div>
+      <div class="eyebrow">Elsword · Nebulon Armor</div>
+      <h1>内布隆防具<span class="sep"> · </span><br class="mbr">变换成本计算器</h1>
+      <p class="sub">按原模拟器的词条概率与评分规则，精确计算冲到目标分数要多少次、花多少钱。</p>
+    </div>
+  </div>
+  <nav class="actions" aria-label="数据来源">
+    <a href="https://add1010751.github.io/Nebulon-Suit-Armor/" target="_blank" rel="noopener noreferrer">原模拟器 ↗</a>
+    <a href="https://m.elsword.nexon.com/news/probability/354" target="_blank" rel="noopener noreferrer">官方概率页 ↗</a>
+  </nav>
+</header>
+
+<main class="layout">
+  <aside class="panel side" aria-label="计算参数与结果">
+    <div class="control">
+      <div class="control-head">
+        <label for="target">目标分数</label>
+        <span class="hint" id="maxHint">+11 上限 37.9 分</span>
+      </div>
+      <div class="input-wrap">
+        <input id="target" type="number" inputmode="decimal" min="0" step="0.1" value="15" aria-describedby="maxHint">
+        <span class="unit">分</span>
+      </div>
+      <input id="targetRange" type="range" min="0" max="37.9" step="0.1" value="15" aria-label="拖动选择目标分数">
+      <div class="presets" id="presets" aria-label="常用目标分数"></div>
+    </div>
+
+    <div class="control">
+      <div class="control-head">
+        <span class="label"><img class="stone" src="data:image/webp;base64,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" alt="" width="17" height="17">单次价格</span>
+        <span class="hint">每次变换 1 颗变换石</span>
+      </div>
+      <div class="input-wrap">
+        <span class="prefix">¥</span>
+        <input id="price" type="number" inputmode="decimal" min="0" step="0.1" value="3.9">
+        <span class="unit">元 / 次</span>
+      </div>
+    </div>
+
+    <div class="control" style="margin-bottom:14px">
+      <div class="control-head">
+        <span class="label">强化等级</span>
+        <span class="hint">影响强化词条分值</span>
+      </div>
+      <div class="seg" role="radiogroup" aria-label="强化等级">
+        <input type="radio" name="level" id="lv9" value="9"><label for="lv9">+9</label>
+        <input type="radio" name="level" id="lv10" value="10"><label for="lv10">+10</label>
+        <input type="radio" name="level" id="lv11" value="11" checked><label for="lv11">+11</label>
+        <input type="radio" name="level" id="lv12" value="12"><label for="lv12">+12</label>
+        <input type="radio" name="level" id="lv13" value="13"><label for="lv13">+13</label>
+      </div>
+    </div>
+
+    <div class="result">
+      <div class="result-label">平均花费</div>
+      <div class="result-cost" id="kCost">¥124.80</div>
+      <div class="result-sub" id="kSub">≈ <b>32.0</b> 次 × <b>¥3.90</b> / 次</div>
+
+      <div class="result-grid">
+        <div><span>单次达标率</span><strong id="kP">3.12%</strong></div>
+        <div><span>平均次数</span><strong id="kN">32.0</strong></div>
+      </div>
+
+      <div class="quantiles">
+        <div class="q"><span class="q-label">50% 把握</span><span class="qn" id="q50n">—</span><span class="qc" id="q50c">—</span></div>
+        <div class="q"><span class="q-label">90% 把握</span><span class="qn" id="q90n">—</span><span class="qc" id="q90c">—</span></div>
+        <div class="q"><span class="q-label">99% 把握</span><span class="qn" id="q99n">—</span><span class="qc" id="q99c">—</span></div>
+      </div>
+      <div class="status" id="status" role="status"></div>
+      <p class="footnote">期望值 = 1 / 单次达标率。实际次数可能更少，也可能多得多；「把握」才是预算该看的东西。</p>
+    </div>
+  </aside>
+
+  <div class="charts">
+    <section class="panel chart-card" aria-labelledby="pmfTitle">
+      <header>
+        <div>
+          <h2 id="pmfTitle">恰好第 N 次成功</h2>
+          <p class="chart-sub" id="pmfSub">单次达标 3.12% · 下排横轴为累计花费</p>
+        </div>
+        <span class="tag">几何分布</span>
+      </header>
+      <div class="chart-wrap">
+        <div class="chart" id="chartPmf"></div>
+        <div class="chart-tip" id="tipPmf" aria-hidden="true"></div>
+      </div>
+    </section>
+
+    <section class="panel chart-card" aria-labelledby="cdfTitle">
+      <header>
+        <div>
+          <h2 id="cdfTitle">N 次以内至少成功一次</h2>
+          <p class="chart-sub" id="cdfSub">累计概率 · 90% 把握 = 73 次 · ¥284.70</p>
+        </div>
+        <span class="tag">累计概率</span>
+      </header>
+      <div class="chart-wrap">
+        <div class="chart" id="chartCdf"></div>
+        <div class="chart-tip" id="tipCdf" aria-hidden="true"></div>
+      </div>
+    </section>
+  </div>
+
+  <section class="panel table-panel" aria-labelledby="tableTitle">
+    <div class="section-head">
+      <div>
+        <h2 id="tableTitle">词条与数值概率</h2>
+        <p>每次变换从 18 个词条中<b>不放回</b>抽 3 个；词条按权重抽取，数值在区间内等概率。概率为精确枚举值，不是模拟。</p>
+      </div>
+      <div class="legend" aria-hidden="true">
+        <span><i class="dot enh"></i>强化词条</span>
+        <span><i class="dot zero"></i>原网页不计分</span>
+      </div>
+    </div>
+    <div class="table-scroll" tabindex="0" role="region" aria-label="词条概率表，可横向滚动">
+      <table>
+        <thead>
+          <tr>
+            <th scope="col">词条</th>
+            <th scope="col" class="num">单格概率<span class="th-sub">1 格中抽到</span></th>
+            <th scope="col" class="num">每次变换<span class="th-sub">3 格至少 1 次</span></th>
+            <th scope="col" class="num">单档概率<span class="th-sub">某一数值出现</span></th>
+            <th scope="col">数值 → 分值（<span id="thLevel">+11</span>）<span class="th-sub">按原网页评分表，区间内等概率</span></th>
+          </tr>
+        </thead>
+        <tbody id="tableBody"></tbody>
+      </table>
+    </div>
+    <p class="table-note">单档概率 = 每次变换出现率 ÷ 档位数。强化词条的数值是「每 +1 强化等级」的系数，分值会随等级变化；普通词条单位为 %。</p>
+  </section>
+
+  <section class="panel notes-panel" aria-labelledby="notesTitle">
+    <h2 id="notesTitle" style="font-size:15px;margin:0">计分规则里的两个坑</h2>
+    <div class="callout">
+      <div class="callout-title"><span class="ico">!</span>这些情况在原网页里都是 0 分</div>
+      <p>下面的概率与花费完全按原网页的评分表计算，所以有些词条抽到了也不加分——这会让高分目标的成本明显变高：</p>
+      <ul>
+        <li><b>6 个词条没有评分规则</b>：强韧技能伤害增加（与同类的「强烈 / 超越」不同，疑似原网页漏配）、致命一击、极大化、无视敌人物理/魔法防御力、对一般怪物造成的伤害增加、辅助职业恢复技能 HP/MP 效益增加。</li>
+        <li><b>9 个计分词条的低档也记 0 分</b>：持续伤害、物理/魔法攻击力、攻击体力 100% 以下、两极化从 0.4 起算（0.1～0.3 记 0 分）；致命一击伤害、给予 Boss 伤害增加、强烈 / 超越 / 所有技能伤害增加从 0.5 起算（0.1～0.4 记 0 分）。</li>
+      </ul>
+    </div>
+
+    <details>
+      <summary>模型、算法与数据来源</summary>
+      <div class="prose">
+        <p><b>抽取模型：</b>每次变换从 18 个词条中不放回抽 3 个（同一词条不会出现两次）。普通词条单格权重 6.5%，三条强化词条分别为 0.833% / 0.833% / 0.834%。抽中后数值在词条区间内等概率，再按评分表换算成分值。</p>
+        <p><b>总分：</b>3 个词条分值之和，精度 0.1 分。强化词条分值 = 系数 × 强化等级 × 评分倍率，所以切换 +9～+13 会改变总分分布。</p>
+        <p><b>概率：</b>枚举全部 4,896 种词条排列与 4,896,000 种「词条 + 数值」结果后精确求和，没有随机模拟误差。</p>
+        <p><b>次数与花费：</b>每次变换相互独立，达成次数 N 服从几何分布：P(N = n) = (1−p)ⁿ⁻¹p，P(N ≤ n) = 1−(1−p)ⁿ，E[N] = 1/p；累计花费 = N × 单次价格。中位数 / 90% / 99% 由分位数公式直接算出。</p>
+        <p><b>来源：</b><a href="https://add1010751.github.io/Nebulon-Suit-Armor/" target="_blank" rel="noopener noreferrer">內布隆防具 - 選項變換模擬器</a>（抓取于 2026-11-17）· <a href="https://m.elsword.nexon.com/news/probability/354" target="_blank" rel="noopener noreferrer">官方機率頁</a>。原网页按 29 NT / 次估算，本页改为人民币并开放改价。</p>
+        <p><b>声明：</b>非官方工具，只对原网页的规则做数学换算；游戏内实际概率以官方公告为准。</p>
+      </div>
+    </details>
+  </section>
+</main>
+
+<footer class="footer">
+  <span>内布隆防具 · 变换成本计算器 —— 目标分数 → 尝试次数 → 人民币</span>
+  <span>数据抓取 2026-11-17 · 仅作估算参考</span>
+</footer>
+
+<script>
+const DATA = {"meta":{"source":"https://add1010751.github.io/Nebulon-Suit-Armor/","probabilitySource":"https://m.elsword.nexon.com/news/probability/354","scraped":"2026-11-17","note":"3 slots drawn without replacement, entry weight ∝ weight; value uniform within entry; total score = sum of 3 entry scores."},"levels":[9,10,11,12,13],"entries":[{"name":"防具強化數值每1，物理/魔法攻擊力","nameSC":"防具强化数值每1，物理/魔法攻击力","weight":0.833,"isEnh":true,"zero":false,"values":[{"value":0.02,"scores":{"9":1.3,"10":1.4,"11":1.5,"12":1.7,"13":1.8}},{"value":0.04,"scores":{"9":2.5,"10":2.8,"11":3.1,"12":3.4,"13":3.6}},{"value":0.06,"scores":{"9":3.8,"10":4.2,"11":4.6,"12":5,"13":5.5}},{"value":0.08,"scores":{"9":5,"10":5.6,"11":6.2,"12":6.7,"13":7.3}},{"value":0.1,"scores":{"9":6.3,"10":7,"11":7.7,"12":8.4,"13":9.1}},{"value":0.12,"scores":{"9":7.6,"10":8.4,"11":9.2,"12":10.1,"13":10.9}},{"value":0.14,"scores":{"9":8.8,"10":9.8,"11":10.8,"12":11.8,"13":12.7}},{"value":0.16,"scores":{"9":10.1,"10":11.2,"11":12.3,"12":13.4,"13":14.6}},{"value":0.18,"scores":{"9":11.3,"10":12.6,"11":13.9,"12":15.1,"13":16.4}},{"value":0.2,"scores":{"9":12.6,"10":14,"11":15.4,"12":16.8,"13":18.2}}],"slotProb":0.008329999999999999,"appearProb":0.0265469087},{"name":"防具強化數值每1，致命一擊傷害","nameSC":"防具强化数值每1，致命一击伤害","weight":0.833,"isEnh":true,"zero":false,"values":[{"value":0.02,"scores":{"9":0.8,"10":0.9,"11":1,"12":1.1,"13":1.2}},{"value":0.04,"scores":{"9":1.6,"10":1.8,"11":2,"12":2.2,"13":2.3}},{"value":0.06,"scores":{"9":2.4,"10":2.7,"11":3,"12":3.2,"13":3.5}},{"value":0.08,"scores":{"9":3.2,"10":3.6,"11":4,"12":4.3,"13":4.7}},{"value":0.1,"scores":{"9":4.1,"10":4.5,"11":5,"12":5.4,"13":5.9}},{"value":0.12,"scores":{"9":4.9,"10":5.4,"11":5.9,"12":6.5,"13":7}},{"value":0.14,"scores":{"9":5.7,"10":6.3,"11":6.9,"12":7.6,"13":8.2}},{"value":0.16,"scores":{"9":6.5,"10":7.2,"11":7.9,"12":8.6,"13":9.4}},{"value":0.18,"scores":{"9":7.3,"10":8.1,"11":8.9,"12":9.7,"13":10.5}},{"value":0.2,"scores":{"9":8.1,"10":9,"11":9.9,"12":10.8,"13":11.7}}],"slotProb":0.008329999999999999,"appearProb":0.0265469087},{"name":"防具強化數值每1，所有技能傷害","nameSC":"防具强化数值每1，所有技能伤害","weight":0.834,"isEnh":true,"zero":false,"values":[{"value":0.02,"scores":{"9":1,"10":1.1,"11":1.3,"12":1.4,"13":1.5}},{"value":0.04,"scores":{"9":2.1,"10":2.3,"11":2.5,"12":2.7,"13":3}},{"value":0.06,"scores":{"9":3.1,"10":3.4,"11":3.8,"12":4.1,"13":4.4}},{"value":0.08,"scores":{"9":4.1,"10":4.6,"11":5,"12":5.5,"13":5.9}},{"value":0.1,"scores":{"9":5.1,"10":5.7,"11":6.3,"12":6.8,"13":7.4}},{"value":0.12,"scores":{"9":6.2,"10":6.8,"11":7.5,"12":8.2,"13":8.9}},{"value":0.14,"scores":{"9":7.2,"10":8,"11":8.8,"12":9.6,"13":10.4}},{"value":0.16,"scores":{"9":8.2,"10":9.1,"11":10,"12":10.9,"13":11.9}},{"value":0.18,"scores":{"9":9.2,"10":10.3,"11":11.3,"12":12.3,"13":13.3}},{"value":0.2,"scores":{"9":10.3,"10":11.4,"11":12.5,"12":13.7,"13":14.8}}],"slotProb":0.00834,"appearProb":0.0265785068},{"name":"根據攻擊時給予的傷害量的n%，在3秒內給予持續傷害","nameSC":"根据攻击时给予的伤害量的n%，在3秒内给予持续伤害","weight":6.5,"isEnh":false,"zero":false,"values":[{"value":0.1,"scores":{"9":0,"10":0,"11":0,"12":0,"13":0}},{"value":0.2,"scores":{"9":0,"10":0,"11":0,"12":0,"13":0}},{"value":0.3,"scores":{"9":0,"10":0,"11":0,"12":0,"13":0}},{"value":0.4,"scores":{"9":2.8,"10":2.8,"11":2.8,"12":2.8,"13":2.8}},{"value":0.5,"scores":{"9":3.5,"10":3.5,"11":3.5,"12":3.5,"13":3.5}},{"value":0.6,"scores":{"9":4.2,"10":4.2,"11":4.2,"12":4.2,"13":4.2}},{"value":0.7,"scores":{"9":4.9,"10":4.9,"11":4.9,"12":4.9,"13":4.9}},{"value":0.8,"scores":{"9":5.6,"10":5.6,"11":5.6,"12":5.6,"13":5.6}},{"value":0.9,"scores":{"9":6.3,"10":6.3,"11":6.3,"12":6.3,"13":6.3}},{"value":1,"scores":{"9":7,"10":7,"11":7,"12":7,"13":7}}],"slotProb":0.065,"appearProb":0.1946885117},{"name":"物理/魔法攻擊力","nameSC":"物理/魔法攻击力","weight":6.5,"isEnh":false,"zero":false,"values":[{"value":0.1,"scores":{"9":0,"10":0,"11":0,"12":0,"13":0}},{"value":0.2,"scores":{"9":0,"10":0,"11":0,"12":0,"13":0}},{"value":0.3,"scores":{"9":0,"10":0,"11":0,"12":0,"13":0}},{"value":0.4,"scores":{"9":2.8,"10":2.8,"11":2.8,"12":2.8,"13":2.8}},{"value":0.5,"scores":{"9":3.5,"10":3.5,"11":3.5,"12":3.5,"13":3.5}},{"value":0.6,"scores":{"9":4.2,"10":4.2,"11":4.2,"12":4.2,"13":4.2}},{"value":0.7,"scores":{"9":4.9,"10":4.9,"11":4.9,"12":4.9,"13":4.9}},{"value":0.8,"scores":{"9":5.6,"10":5.6,"11":5.6,"12":5.6,"13":5.6}},{"value":0.9,"scores":{"9":6.3,"10":6.3,"11":6.3,"12":6.3,"13":6.3}},{"value":1,"scores":{"9":7,"10":7,"11":7,"12":7,"13":7}}],"slotProb":0.065,"appearProb":0.1946885117},{"name":"攻擊體力100%以下的敵人時，傷害增加","nameSC":"攻击体力100%以下的敌人时，伤害增加","weight":6.5,"isEnh":false,"zero":false,"values":[{"value":0.1,"scores":{"9":0,"10":0,"11":0,"12":0,"13":0}},{"value":0.2,"scores":{"9":0,"10":0,"11":0,"12":0,"13":0}},{"value":0.3,"scores":{"9":0,"10":0,"11":0,"12":0,"13":0}},{"value":0.4,"scores":{"9":4,"10":4,"11":4,"12":4,"13":4}},{"value":0.5,"scores":{"9":5,"10":5,"11":5,"12":5,"13":5}},{"value":0.6,"scores":{"9":6,"10":6,"11":6,"12":6,"13":6}},{"value":0.7,"scores":{"9":7,"10":7,"11":7,"12":7,"13":7}},{"value":0.8,"scores":{"9":8,"10":8,"11":8,"12":8,"13":8}},{"value":0.9,"scores":{"9":9,"10":9,"11":9,"12":9,"13":9}},{"value":1,"scores":{"9":10,"10":10,"11":10,"12":10,"13":10}}],"slotProb":0.065,"appearProb":0.1946885117},{"name":"兩極化：攻擊/被擊傷害","nameSC":"两极化：攻击/被击伤害","weight":6.5,"isEnh":false,"zero":false,"values":[{"value":0.1,"scores":{"9":0,"10":0,"11":0,"12":0,"13":0}},{"value":0.2,"scores":{"9":0,"10":0,"11":0,"12":0,"13":0}},{"value":0.3,"scores":{"9":0,"10":0,"11":0,"12":0,"13":0}},{"value":0.4,"scores":{"9":2.8,"10":2.8,"11":2.8,"12":2.8,"13":2.8}},{"value":0.5,"scores":{"9":3.5,"10":3.5,"11":3.5,"12":3.5,"13":3.5}},{"value":0.6,"scores":{"9":4.2,"10":4.2,"11":4.2,"12":4.2,"13":4.2}},{"value":0.7,"scores":{"9":4.9,"10":4.9,"11":4.9,"12":4.9,"13":4.9}},{"value":0.8,"scores":{"9":5.6,"10":5.6,"11":5.6,"12":5.6,"13":5.6}},{"value":0.9,"scores":{"9":6.3,"10":6.3,"11":6.3,"12":6.3,"13":6.3}},{"value":1,"scores":{"9":7,"10":7,"11":7,"12":7,"13":7}}],"slotProb":0.065,"appearProb":0.1946885117},{"name":"致命一擊傷害","nameSC":"致命一击伤害","weight":6.5,"isEnh":false,"zero":false,"values":[{"value":0.1,"scores":{"9":0,"10":0,"11":0,"12":0,"13":0}},{"value":0.2,"scores":{"9":0,"10":0,"11":0,"12":0,"13":0}},{"value":0.3,"scores":{"9":0,"10":0,"11":0,"12":0,"13":0}},{"value":0.4,"scores":{"9":0,"10":0,"11":0,"12":0,"13":0}},{"value":0.5,"scores":{"9":2.3,"10":2.3,"11":2.3,"12":2.3,"13":2.3}},{"value":0.6,"scores":{"9":2.7,"10":2.7,"11":2.7,"12":2.7,"13":2.7}},{"value":0.7,"scores":{"9":3.2,"10":3.2,"11":3.2,"12":3.2,"13":3.2}},{"value":0.8,"scores":{"9":3.6,"10":3.6,"11":3.6,"12":3.6,"13":3.6}},{"value":0.9,"scores":{"9":4.1,"10":4.1,"11":4.1,"12":4.1,"13":4.1}},{"value":1,"scores":{"9":4.5,"10":4.5,"11":4.5,"12":4.5,"13":4.5}}],"slotProb":0.065,"appearProb":0.1946885117},{"name":"給予Boss傷害增加","nameSC":"给予Boss伤害增加","weight":6.5,"isEnh":false,"zero":false,"values":[{"value":0.1,"scores":{"9":0,"10":0,"11":0,"12":0,"13":0}},{"value":0.2,"scores":{"9":0,"10":0,"11":0,"12":0,"13":0}},{"value":0.3,"scores":{"9":0,"10":0,"11":0,"12":0,"13":0}},{"value":0.4,"scores":{"9":0,"10":0,"11":0,"12":0,"13":0}},{"value":0.5,"scores":{"9":2.3,"10":2.3,"11":2.3,"12":2.3,"13":2.3}},{"value":0.6,"scores":{"9":2.7,"10":2.7,"11":2.7,"12":2.7,"13":2.7}},{"value":0.7,"scores":{"9":3.2,"10":3.2,"11":3.2,"12":3.2,"13":3.2}},{"value":0.8,"scores":{"9":3.6,"10":3.6,"11":3.6,"12":3.6,"13":3.6}},{"value":0.9,"scores":{"9":4.1,"10":4.1,"11":4.1,"12":4.1,"13":4.1}},{"value":1,"scores":{"9":4.5,"10":4.5,"11":4.5,"12":4.5,"13":4.5}}],"slotProb":0.065,"appearProb":0.1946885117},{"name":"強韌技能傷害增加","nameSC":"强韧技能伤害增加","weight":6.5,"isEnh":false,"zero":true,"values":[{"value":0.1,"scores":{"9":0,"10":0,"11":0,"12":0,"13":0}},{"value":0.2,"scores":{"9":0,"10":0,"11":0,"12":0,"13":0}},{"value":0.3,"scores":{"9":0,"10":0,"11":0,"12":0,"13":0}},{"value":0.4,"scores":{"9":0,"10":0,"11":0,"12":0,"13":0}},{"value":0.5,"scores":{"9":0,"10":0,"11":0,"12":0,"13":0}},{"value":0.6,"scores":{"9":0,"10":0,"11":0,"12":0,"13":0}},{"value":0.7,"scores":{"9":0,"10":0,"11":0,"12":0,"13":0}},{"value":0.8,"scores":{"9":0,"10":0,"11":0,"12":0,"13":0}},{"value":0.9,"scores":{"9":0,"10":0,"11":0,"12":0,"13":0}},{"value":1,"scores":{"9":0,"10":0,"11":0,"12":0,"13":0}}],"slotProb":0.065,"appearProb":0.1946885117},{"name":"強烈技能傷害增加","nameSC":"强烈技能伤害增加","weight":6.5,"isEnh":false,"zero":false,"values":[{"value":0.1,"scores":{"9":0,"10":0,"11":0,"12":0,"13":0}},{"value":0.2,"scores":{"9":0,"10":0,"11":0,"12":0,"13":0}},{"value":0.3,"scores":{"9":0,"10":0,"11":0,"12":0,"13":0}},{"value":0.4,"scores":{"9":0,"10":0,"11":0,"12":0,"13":0}},{"value":0.5,"scores":{"9":2.3,"10":2.3,"11":2.3,"12":2.3,"13":2.3}},{"value":0.6,"scores":{"9":2.7,"10":2.7,"11":2.7,"12":2.7,"13":2.7}},{"value":0.7,"scores":{"9":3.2,"10":3.2,"11":3.2,"12":3.2,"13":3.2}},{"value":0.8,"scores":{"9":3.6,"10":3.6,"11":3.6,"12":3.6,"13":3.6}},{"value":0.9,"scores":{"9":4.1,"10":4.1,"11":4.1,"12":4.1,"13":4.1}},{"value":1,"scores":{"9":4.5,"10":4.5,"11":4.5,"12":4.5,"13":4.5}}],"slotProb":0.065,"appearProb":0.1946885117},{"name":"超越技能傷害增加","nameSC":"超越技能伤害增加","weight":6.5,"isEnh":false,"zero":false,"values":[{"value":0.1,"scores":{"9":0,"10":0,"11":0,"12":0,"13":0}},{"value":0.2,"scores":{"9":0,"10":0,"11":0,"12":0,"13":0}},{"value":0.3,"scores":{"9":0,"10":0,"11":0,"12":0,"13":0}},{"value":0.4,"scores":{"9":0,"10":0,"11":0,"12":0,"13":0}},{"value":0.5,"scores":{"9":2.3,"10":2.3,"11":2.3,"12":2.3,"13":2.3}},{"value":0.6,"scores":{"9":2.7,"10":2.7,"11":2.7,"12":2.7,"13":2.7}},{"value":0.7,"scores":{"9":3.2,"10":3.2,"11":3.2,"12":3.2,"13":3.2}},{"value":0.8,"scores":{"9":3.6,"10":3.6,"11":3.6,"12":3.6,"13":3.6}},{"value":0.9,"scores":{"9":4.1,"10":4.1,"11":4.1,"12":4.1,"13":4.1}},{"value":1,"scores":{"9":4.5,"10":4.5,"11":4.5,"12":4.5,"13":4.5}}],"slotProb":0.065,"appearProb":0.1946885117},{"name":"所有技能傷害增加","nameSC":"所有技能伤害增加","weight":6.5,"isEnh":false,"zero":false,"values":[{"value":0.1,"scores":{"9":0,"10":0,"11":0,"12":0,"13":0}},{"value":0.2,"scores":{"9":0,"10":0,"11":0,"12":0,"13":0}},{"value":0.3,"scores":{"9":0,"10":0,"11":0,"12":0,"13":0}},{"value":0.4,"scores":{"9":0,"10":0,"11":0,"12":0,"13":0}},{"value":0.5,"scores":{"9":2.9,"10":2.9,"11":2.9,"12":2.9,"13":2.9}},{"value":0.6,"scores":{"9":3.4,"10":3.4,"11":3.4,"12":3.4,"13":3.4}},{"value":0.7,"scores":{"9":4,"10":4,"11":4,"12":4,"13":4}},{"value":0.8,"scores":{"9":4.6,"10":4.6,"11":4.6,"12":4.6,"13":4.6}},{"value":0.9,"scores":{"9":5.1,"10":5.1,"11":5.1,"12":5.1,"13":5.1}},{"value":1,"scores":{"9":5.7,"10":5.7,"11":5.7,"12":5.7,"13":5.7}}],"slotProb":0.065,"appearProb":0.1946885117},{"name":"致命一擊","nameSC":"致命一击","weight":6.5,"isEnh":false,"zero":true,"values":[{"value":0.3,"scores":{"9":0,"10":0,"11":0,"12":0,"13":0}},{"value":0.4,"scores":{"9":0,"10":0,"11":0,"12":0,"13":0}},{"value":0.5,"scores":{"9":0,"10":0,"11":0,"12":0,"13":0}},{"value":0.6,"scores":{"9":0,"10":0,"11":0,"12":0,"13":0}},{"value":0.7,"scores":{"9":0,"10":0,"11":0,"12":0,"13":0}},{"value":0.8,"scores":{"9":0,"10":0,"11":0,"12":0,"13":0}},{"value":0.9,"scores":{"9":0,"10":0,"11":0,"12":0,"13":0}},{"value":1,"scores":{"9":0,"10":0,"11":0,"12":0,"13":0}},{"value":1.1,"scores":{"9":0,"10":0,"11":0,"12":0,"13":0}},{"value":1.2,"scores":{"9":0,"10":0,"11":0,"12":0,"13":0}}],"slotProb":0.065,"appearProb":0.1946885117},{"name":"極大化","nameSC":"极大化","weight":6.5,"isEnh":false,"zero":true,"values":[{"value":0.3,"scores":{"9":0,"10":0,"11":0,"12":0,"13":0}},{"value":0.4,"scores":{"9":0,"10":0,"11":0,"12":0,"13":0}},{"value":0.5,"scores":{"9":0,"10":0,"11":0,"12":0,"13":0}},{"value":0.6,"scores":{"9":0,"10":0,"11":0,"12":0,"13":0}},{"value":0.7,"scores":{"9":0,"10":0,"11":0,"12":0,"13":0}},{"value":0.8,"scores":{"9":0,"10":0,"11":0,"12":0,"13":0}},{"value":0.9,"scores":{"9":0,"10":0,"11":0,"12":0,"13":0}},{"value":1,"scores":{"9":0,"10":0,"11":0,"12":0,"13":0}},{"value":1.1,"scores":{"9":0,"10":0,"11":0,"12":0,"13":0}},{"value":1.2,"scores":{"9":0,"10":0,"11":0,"12":0,"13":0}}],"slotProb":0.065,"appearProb":0.1946885117},{"name":"無視敵人物理/魔法防禦力","nameSC":"无视敌人物理/魔法防御力","weight":6.5,"isEnh":false,"zero":true,"values":[{"value":0.1,"scores":{"9":0,"10":0,"11":0,"12":0,"13":0}},{"value":0.2,"scores":{"9":0,"10":0,"11":0,"12":0,"13":0}},{"value":0.3,"scores":{"9":0,"10":0,"11":0,"12":0,"13":0}},{"value":0.4,"scores":{"9":0,"10":0,"11":0,"12":0,"13":0}},{"value":0.5,"scores":{"9":0,"10":0,"11":0,"12":0,"13":0}},{"value":0.6,"scores":{"9":0,"10":0,"11":0,"12":0,"13":0}},{"value":0.7,"scores":{"9":0,"10":0,"11":0,"12":0,"13":0}},{"value":0.8,"scores":{"9":0,"10":0,"11":0,"12":0,"13":0}},{"value":0.9,"scores":{"9":0,"10":0,"11":0,"12":0,"13":0}},{"value":1,"scores":{"9":0,"10":0,"11":0,"12":0,"13":0}}],"slotProb":0.065,"appearProb":0.1946885117},{"name":"對一般怪物造成的傷害增加","nameSC":"对一般怪物造成的伤害增加","weight":6.5,"isEnh":false,"zero":true,"values":[{"value":0.3,"scores":{"9":0,"10":0,"11":0,"12":0,"13":0}},{"value":0.4,"scores":{"9":0,"10":0,"11":0,"12":0,"13":0}},{"value":0.5,"scores":{"9":0,"10":0,"11":0,"12":0,"13":0}},{"value":0.6,"scores":{"9":0,"10":0,"11":0,"12":0,"13":0}},{"value":0.7,"scores":{"9":0,"10":0,"11":0,"12":0,"13":0}},{"value":0.8,"scores":{"9":0,"10":0,"11":0,"12":0,"13":0}},{"value":0.9,"scores":{"9":0,"10":0,"11":0,"12":0,"13":0}},{"value":1,"scores":{"9":0,"10":0,"11":0,"12":0,"13":0}},{"value":1.1,"scores":{"9":0,"10":0,"11":0,"12":0,"13":0}},{"value":1.2,"scores":{"9":0,"10":0,"11":0,"12":0,"13":0}}],"slotProb":0.065,"appearProb":0.1946885117},{"name":"輔助職業恢復技能HP/MP效益增加","nameSC":"辅助职业恢复技能HP/MP效益增加","weight":6.5,"isEnh":false,"zero":true,"values":[{"value":0.3,"scores":{"9":0,"10":0,"11":0,"12":0,"13":0}},{"value":0.4,"scores":{"9":0,"10":0,"11":0,"12":0,"13":0}},{"value":0.5,"scores":{"9":0,"10":0,"11":0,"12":0,"13":0}},{"value":0.6,"scores":{"9":0,"10":0,"11":0,"12":0,"13":0}},{"value":0.7,"scores":{"9":0,"10":0,"11":0,"12":0,"13":0}},{"value":0.8,"scores":{"9":0,"10":0,"11":0,"12":0,"13":0}},{"value":0.9,"scores":{"9":0,"10":0,"11":0,"12":0,"13":0}},{"value":1,"scores":{"9":0,"10":0,"11":0,"12":0,"13":0}},{"value":1.1,"scores":{"9":0,"10":0,"11":0,"12":0,"13":0}},{"value":1.2,"scores":{"9":0,"10":0,"11":0,"12":0,"13":0}}],"slotProb":0.065,"appearProb":0.1946885117}],"histograms":{"9":{"maxTenths":329,"probs":[0.200513217778,0,0,0,0,0,0,0,0.000946675801,0,0.000947821868,0,0,0.000946675801,0,0,0.000946675801,0,0.000002715231,0,0,0.000950533816,0,0.028539812778,0.000946675801,0.000946675801,0.000002715231,0.028537097548,0.021919359211,0.007139701565,0,0.001033842435,0.029483773348,0.000088833088,0.007139704848,0.022008091448,0.028688360408,0.00011305257,0.001012000643,0.000110266083,0.014612761469,0.030499671072,0.022051207646,0.000151266421,0.000261747427,0.028715488879,0.00824694761,0.000110269562,0.000369487018,0.023109027531,0.010446820261,0.010388431788,0.000983515468,0.000305180857,0.001245880439,0.004369790944,0.023343338439,0.009607487134,0.002352871642,0.0044428825,0.009639515352,0.00170925915,0.003716109289,0.02750760356,0.00604313809,0.004029012081,0.001173454824,0.003757624845,0.007458047316,0.005804983977,0.032523043374,0.002762333106,0.007795579135,0.00711909503,0.004500490343,0.001852993929,0.007410103119,0.007411641359,0.004945969492,0.003760534863,0.010698840974,0.007392412977,0.004855820006,0.006602708871,0.003874722502,0.005488443471,0.006205882459,0.004715162303,0.004509635129,0.002324191047,0.013839323601,0.005490786617,0.006676599347,0.004445160289,0.002940738511,0.004642574086,0.003313193256,0.006278922337,0.005567771025,0.00471642839,0.008922338097,0.004831175202,0.005132929632,0.003432899059,0.003956415485,0.005352541681,0.004835139209,0.002214903702,0.003866293117,0.002187252094,0.002137154588,0.004026214208,0.004762764394,0.003866950357,0.001892112019,0.004296711687,0.00272900013,0.001987959808,0.001692790835,0.003840717431,0.002267270374,0.00259630907,0.002336930107,0.002200095088,0.001310510216,0.002207182288,0.004929104615,0.00242585701,0.001709530085,0.001728214092,0.001690569703,0.001856840445,0.002295663654,0.002738006597,0.00104125609,0.002194761114,0.002268160523,0.001246760902,0.000964127893,0.001501167751,0.001974784153,0.0017487274,0.001499347164,0.001453126064,0.000885989825,0.001437391363,0.001534780612,0.000876896856,0.000879573244,0.001320453095,0.001138130473,0.000946518821,0.000731066361,0.001330658386,0.000651423946,0.000720173573,0.001026220666,0.000760341834,0.000767616341,0.000486423006,0.001052538255,0.000528714338,0.000786202603,0.000999932225,0.000506174287,0.000398043885,0.000459887112,0.000503952066,0.000499070555,0.00042658782,0.000810543332,0.000549684673,0.000441077968,0.000418563946,0.000289865239,0.000341275638,0.000420521587,0.000313331455,0.000312154462,0.000202232546,0.000206409816,0.000305222419,0.000351354106,0.000343974837,0.000192625014,0.000232211376,0.000221053516,0.000174591354,0.00018925808,0.000232035572,0.000166874734,0.000192508258,0.000182141681,0.000167832356,0.00013164417,0.000143806076,0.000217729634,0.000118256537,0.000138772478,0.000119460657,0.000072875646,0.000113514664,0.000110754974,0.000123332341,0.000081529943,0.000102946413,0.000108017099,0.000059844566,0.000067534546,0.000066746552,0.000046127917,0.000066249656,0.000062864452,0.000068158137,0.000037267673,0.000052026326,0.000074751699,0.000031573565,0.000035381263,0.000048053381,0.000029670728,0.000027971334,0.000020580837,0.00003398004,0.000021801685,0.000020611651,0.00005173782,0.000022885411,0.000022485272,0.000017477269,0.000017339666,0.000013002931,0.000017971627,0.00002423897,0.000012714837,0.000009862628,0.000010174776,0.000010093383,0.000012655448,0.000011301064,0.000011513066,0.000010060927,0.000008545449,0.000006777022,0.000006361773,0.000009087623,0.00000706968,0.000004039524,0.000007013939,0.000005662957,0.000002336376,0.000004326505,0.000007960239,0.000005210374,0.000003736462,0.000002920184,0.000003074694,0.000002552107,0.000004325331,0.000004150348,0.000001065128,0.000003166051,0.000003631994,0.000002246112,0.000001456587,0.000001241913,0.000003332269,0.000001549969,0.000001120298,0.000001738762,5.46479e-7,0.000001950198,0.000001099045,0.000001895619,4.16677e-7,0.000001031758,0.000001558264,3.95351e-7,3.31733e-7,9.13705e-7,5.9027e-8,1.54653e-7,7.62577e-7,0.000001069531,8.8504e-8,1.80641e-7,9.17266e-7,2.9478e-8,2.06594e-7,7.99212e-7,0,6.2552e-8,8.854e-8,2.9513e-8,6.2552e-8,5.9027e-8,7.62613e-7,3.3038e-8,8.854e-8,1.51092e-7,0,0,3.561e-9,0,2.9513e-8,2.9513e-8,2.9513e-8,2.9478e-8,5.9027e-8,2.9513e-8,3.561e-9,0,0,0,0,0,2.9513e-8,0,2.9513e-8,2.9513e-8,0,0,0,0,0,0,0,0,0,2.9513e-8]},"10":{"maxTenths":354,"probs":[0.200513217778,0,0,0,0,0,0,0,0,0.000946675801,0,0.000947821868,0,0,0.000946675801,0,0,0,0.000946675801,0,0.000002715231,0,0,0.029487631363,0,0.000002715231,0,0.029483773348,0.022866035011,0.007136989618,0,0,0.028628541732,0,0.008168220956,0.021919359211,0.029569790354,0.000156690038,0.000110340623,0.000068040073,0.014462257742,0.028800575744,0.022931280865,0.000131966488,0.000065245854,0.029677337645,0.009408556828,0.000110458676,0.000024429637,0.022027887448,0.009784023946,0.009465827134,0.000812870314,0.000133374467,0.002268957026,0.004460225434,0.024310328601,0.009431641642,0.002240085713,0.004544353991,0.009642583317,0.001497788164,0.002762146817,0.027778336025,0.005942680529,0.003021284553,0.000800110075,0.003617038539,0.008582737505,0.005982787347,0.033418826708,0.002724275123,0.007846675429,0.005816784347,0.004592574154,0.00187819674,0.006232128957,0.007399602097,0.004905596516,0.003886795755,0.011446643876,0.007493316471,0.00380906848,0.006517820172,0.004926879746,0.005370512191,0.006101466486,0.004670189456,0.003577339285,0.002207205425,0.014758782192,0.006509743576,0.005625702875,0.004482946696,0.002657757027,0.004632246816,0.003308158281,0.006341200894,0.006553170184,0.004733935914,0.008734450979,0.003642962487,0.005186567465,0.003478978564,0.003918953154,0.00525540719,0.004848554235,0.00215460111,0.003763564256,0.002183079731,0.00209354846,0.003731423722,0.00585814979,0.003008968758,0.002688191886,0.004247136349,0.002875051573,0.002028510327,0.001599522766,0.003919688593,0.002203833409,0.002431096767,0.00227032645,0.002119497741,0.001174987189,0.00242139727,0.005380369497,0.002383901417,0.001411691438,0.001626264893,0.001754199598,0.001909139237,0.002245974547,0.002665180677,0.001089111072,0.002295222624,0.002242626592,0.001123888181,0.000963183702,0.001607495523,0.003200547539,0.001671586213,0.001424473478,0.001429825793,0.00097423194,0.001245597971,0.001565615148,0.001107223742,0.000904189615,0.001284632892,0.001246442318,0.000859807842,0.000609566464,0.001421839323,0.000914259462,0.000663241897,0.001071436331,0.000767943734,0.000652898694,0.000549631584,0.001197258398,0.000732645986,0.000623641035,0.001129171806,0.000437458393,0.000394958058,0.000440398109,0.000607060598,0.000707690289,0.000401621452,0.000917770396,0.00051530465,0.000521266735,0.000360946192,0.000357008181,0.000483419002,0.000438278378,0.000371472813,0.000301118948,0.000211015075,0.000295692703,0.000404616561,0.000471113373,0.00026888597,0.000299672759,0.000320404224,0.000255875362,0.000173968989,0.000205308976,0.000315730131,0.000217425159,0.000210531554,0.00019439634,0.000155209332,0.000144768641,0.00017387305,0.000300702992,0.000154428688,0.000157294535,0.000129404472,0.000101355485,0.000100068944,0.000152470591,0.000182601719,0.000117284537,0.000109627621,0.000124629682,0.00006451307,0.000070478312,0.000085043913,0.000152650631,0.000074297752,0.000100281097,0.000063177036,0.00006290717,0.000056211251,0.000096588599,0.000055191883,0.000036282063,0.000056880571,0.000067060206,0.000038979964,0.000026122725,0.000047375015,0.00003352091,0.000030332713,0.000071412025,0.000031330882,0.000021066632,0.000024515722,0.000058024587,0.000030488348,0.000020657506,0.000034745376,0.000017663868,0.000016900224,0.000013950541,0.000020746163,0.000023257814,0.000017452576,0.000043965075,0.000015412194,0.0000140498,0.000014755027,0.000013756785,0.000015640185,0.000011776021,0.0000118188,0.000011227575,0.000008178995,0.000006759302,0.000010063538,0.000013346026,0.000009255342,0.000010592113,0.000008602512,0.000006360824,0.000005670197,0.000005374354,0.000008873352,0.000004604251,0.000007216084,0.000005386353,0.000004647907,0.000001848199,0.000004291129,0.000007671447,0.000004688639,0.000003677068,0.000002408208,0.000002374633,0.00000333983,0.000004221125,0.000003748874,0.000001490656,0.000003983987,0.000003318388,0.000001786785,5.41816e-7,0.000001889783,0.00000210485,0.000001608996,0.000002796509,0.000001338677,0.000001128165,0.000001456766,0.000002212043,5.79625e-7,3.02184e-7,0.000001860519,0.000001031758,4.54378e-7,3.02184e-7,9.7615e-7,2.72706e-7,1.7708e-7,0.000001827445,3.65945e-7,9.9187e-8,3.28208e-7,9.69064e-7,1.84166e-7,9.203e-8,0.000001005806,5.9027e-8,6.2587e-8,1.80605e-7,6.6113e-8,3.3074e-8,2.9513e-8,0.000001005806,8.8504e-8,6.6113e-8,1.18054e-7,2.9513e-8,3.3074e-8,6.2552e-8,1.21614e-7,0,3.3074e-8,8.8504e-8,6.6113e-8,0,2.9513e-8,1.21614e-7,0,3.3074e-8,0,0,2.9513e-8,6.2552e-8,2.9513e-8,0,3.3074e-8,2.9513e-8,3.561e-9,0,0,0,0,2.9513e-8,0,0,2.9513e-8,3.3074e-8,0,0,0,0,0,0,0,0,0,2.9513e-8]},"11":{"maxTenths":379,"probs":[0.200513217778,0,0,0,0,0,0,0,0,0,0.000946675801,0,0,0.000947821868,0,0.000946675801,0,0,0,0,0.000946675801,0,0,0.028539812778,0,0.000950533816,0,0.028537097548,0.021922074441,0.007134274387,0.000946675801,0.000946675801,0.028537097548,0.000088732237,0.007134274387,0.021924786389,0.028623218688,0.000086017006,0.001099088289,0.000021504252,0.015476239629,0.028605134337,0.022112923508,0.000153978091,0.000045723734,0.02869389172,0.009188003558,0.000193564297,0.000219528539,0.022048488854,0.011351407699,0.009375371141,0.000918143632,0.000200165975,0.001236124032,0.00437348468,0.023323222597,0.008568983582,0.002306571497,0.00522973631,0.009616420588,0.0016698092,0.003747216211,0.027523476824,0.005758534291,0.003088882312,0.001100636042,0.003720610556,0.007242135835,0.006706690603,0.032452090176,0.002837249602,0.006796753691,0.00599283365,0.00441128063,0.002921364625,0.006382827106,0.008070430299,0.004918404149,0.004650103542,0.010616085049,0.006328985695,0.004028715555,0.006402174324,0.003648683432,0.005539634988,0.006141306923,0.004681386443,0.004414847354,0.003168715748,0.013788103148,0.005486323163,0.006534967601,0.004299937563,0.0027978531,0.004708369945,0.003294713703,0.006092961827,0.005445901124,0.00547313493,0.009860372005,0.003780943708,0.005150036928,0.002543031703,0.003794107178,0.005233527696,0.004787442165,0.002135622834,0.004491109757,0.002140037323,0.0022560014,0.003931527827,0.004686299844,0.00373724428,0.001612606093,0.004411018136,0.002814088385,0.001800119478,0.001593515036,0.003857122637,0.002522558271,0.00234408289,0.002269075229,0.003063747351,0.001305118091,0.003241934225,0.003988504337,0.002365235507,0.001629206497,0.001715212121,0.001659003158,0.001925124354,0.002279545566,0.002651282855,0.001205850538,0.002262951702,0.002289452742,0.00107470002,0.000933167342,0.002425347135,0.002296371445,0.001748092798,0.001446565199,0.001307402374,0.000879881688,0.001529489485,0.001501075648,0.000907528894,0.000976232494,0.001490122859,0.001261348123,0.000910743993,0.000711404578,0.001324137994,0.001533409502,0.000840665932,0.001091480477,0.000869608444,0.000736867959,0.000716404489,0.001084183556,0.000518466773,0.000804396587,0.00105773202,0.000579814214,0.000534857034,0.000496933726,0.00057563351,0.00055120998,0.000597504843,0.000973299159,0.000536264977,0.000456785121,0.00034973012,0.000439199647,0.000413303843,0.000419700298,0.000400980098,0.000388645189,0.000379680336,0.000345992452,0.000495843253,0.000366586483,0.000347548681,0.00027681598,0.000294200388,0.000360979052,0.000187450712,0.000359862915,0.000315900308,0.000320479211,0.000186005019,0.000208414359,0.000235157538,0.000191119073,0.000396588713,0.000235808913,0.000138705585,0.000171914116,0.000259040666,0.000129143353,0.000117622024,0.000200625503,0.00020178689,0.00013199124,0.0001662916,0.000111266899,0.000066687318,0.000107991895,0.000166909587,0.000140242388,0.000112078661,0.000086498425,0.000110734769,0.000077726312,0.000104940217,0.000070057026,0.000115775724,0.000052278898,0.000088535937,0.000057150695,0.000048348447,0.000051390753,0.000075445242,0.000129415122,0.000063552735,0.000054348682,0.00004469224,0.000036610358,0.000059230187,0.000039866098,0.000037054472,0.000031099871,0.000042881365,0.000051084638,0.000032176943,0.000029369013,0.000028254677,0.000028716513,0.000049001277,0.000034052427,0.000023908857,0.00002125354,0.000017766693,0.000049185395,0.00002402335,0.000018262251,0.000015576364,0.000018200864,0.000020220143,0.0000153422,0.000021211167,0.000019716234,0.000016217754,0.000036273038,0.000013583423,0.000014147819,0.000007928828,0.000015582173,0.000014729047,0.000011731137,0.000007767164,0.000010309043,0.000006504616,0.00001062155,0.000012539845,0.000010957351,0.000008000687,0.000005855644,0.00000940672,0.000007154644,0.000005724004,0.000005193014,0.000006490984,0.000006036249,0.000005742575,0.000004248514,0.000002904951,0.000003635092,0.000007827561,0.000006571693,0.000004203324,0.000002698617,0.000003222154,0.000003293288,0.000003500769,0.000003148429,0.000003183672,0.000002547974,0.000003191825,0.000002737625,7.30681e-7,0.000001602874,0.000002210834,0.000002576779,0.000003138598,0.000001489769,0.000001186411,6.00522e-7,0.000002481331,0.000001161632,5.20562e-7,0.000001392862,0.000001359716,0.000001127384,5.43061e-7,4.23762e-7,0.000001009366,5.08599e-7,0.000001208767,8.87752e-7,5.46622e-7,3.61211e-7,4.49537e-7,9.72767e-7,2.39668e-7,2.17169e-7,9.46815e-7,2.43121e-7,1.21614e-7,2.10154e-7,1.54688e-7,1.84166e-7,3.61032e-7,0.000001057747,3.3074e-8,3.6635e-8,1.51128e-7,1.8413e-7,9.2101e-8,1.18054e-7,7.121e-9,6.2587e-8,1.25068e-7,1.47567e-7,9.2101e-8,6.2587e-8,1.21614e-7,6.6113e-8,5.9027e-8,0,7.121e-9,1.47567e-7,6.6077e-8,5.9027e-8,0,3.561e-9,3.3074e-8,3.3074e-8,1.18054e-7,0,3.561e-9,2.9513e-8,3.6599e-8,5.9027e-8,0,3.561e-9,2.9513e-8,3.561e-9,2.9513e-8,0,0,0,3.561e-9,2.9513e-8,0,3.561e-9,2.9513e-8,3.561e-9,2.9513e-8,0,0,0,0,0,0,0,0,3.561e-9,2.9513e-8]},"12":{"maxTenths":413,"probs":[0.200513217778,0,0,0,0,0,0,0,0,0,0,0.000946675801,0,0,0.000947821868,0,0,0.000946675801,0,0,0,0,0.000946675801,0.028537097548,0,0.000002715231,0,0.029484919416,0.021922071158,0.007134274387,0,0.000002715231,0.029483773348,0,0.008166967194,0.021919359211,0.028539812778,0.00008612114,0.000088732237,0.000067957802,0.014548248715,0.029571040556,0.021984687614,0.001054223092,0.000088732237,0.028712576607,0.008330779174,0.000086017006,0.000024363569,0.022162145243,0.010532453627,0.009286797871,0.000834708352,0.000151354961,0.002183185057,0.005293387151,0.023319761128,0.008551771586,0.002241011497,0.004410133283,0.00952903515,0.001520620258,0.002867104861,0.026661707151,0.005910451761,0.003719600747,0.000952083554,0.004668795064,0.008467373786,0.005715634692,0.032424414947,0.002765805141,0.006690679802,0.005886974915,0.004381992085,0.001941564916,0.007176286237,0.007389446788,0.004912765546,0.003725652447,0.010369012898,0.006350759597,0.004888968523,0.006500218332,0.00477692998,0.005347270054,0.006872712719,0.004589561667,0.003514757218,0.002173194264,0.013874217124,0.005348170541,0.005663173044,0.00426536928,0.002722988042,0.004609432064,0.004255892963,0.007240274794,0.005181035946,0.004681432645,0.008846860053,0.004563484548,0.00504634435,0.002532517954,0.003806134397,0.005136162066,0.004763390293,0.002096969321,0.004414242538,0.003151303114,0.00220824688,0.00389044605,0.00473188918,0.002860528888,0.001722402408,0.004036129743,0.00270237874,0.00193871281,0.002634796479,0.003710298788,0.002204707423,0.00233052176,0.002199709735,0.003095674396,0.001466291625,0.002370484157,0.003839241277,0.002348417419,0.00163616866,0.001670535237,0.001531034104,0.002006397812,0.002335478686,0.00260620953,0.001930018772,0.002205789928,0.002295610652,0.002228797761,0.001058692395,0.001409424218,0.002016678628,0.001811438698,0.001508362418,0.001391062897,0.000834614146,0.001506851783,0.001770056092,0.000963033688,0.00071183168,0.001250327962,0.001425808516,0.001836087093,0.000702174658,0.00134622714,0.000782018593,0.000677000529,0.001114941307,0.000920913223,0.000714326767,0.000682427821,0.00123918608,0.000514515781,0.000552386256,0.001058803128,0.000741641705,0.00061362235,0.00058847196,0.000582996227,0.001511882305,0.000587384393,0.00086996403,0.000510590601,0.000577930697,0.000413379619,0.00052719889,0.000371514932,0.000446108486,0.000363852761,0.000566046188,0.000578318132,0.000281142549,0.000363842856,0.000369286978,0.00042020503,0.000225576383,0.000274433084,0.000452825848,0.000329435807,0.000316684877,0.000191067243,0.000248144755,0.000360162441,0.000280418558,0.000351572367,0.000187514492,0.00025963714,0.000319088079,0.000288558601,0.000186507927,0.000167854062,0.000310077019,0.000174422695,0.000184428281,0.000178727724,0.000274128248,0.00012532322,0.000131780654,0.000225564088,0.000192688153,0.000204266164,0.000154242546,0.000112634688,0.000077108051,0.000189446768,0.000174421837,0.000088792917,0.000079781695,0.000141492532,0.000089856642,0.000099631302,0.000078524537,0.000139270866,0.000048680166,0.000091288018,0.000141768645,0.000062228423,0.000053769634,0.000084843741,0.000068575396,0.000044803565,0.000044886681,0.000131756961,0.000043890045,0.00005192481,0.000061191142,0.000039416865,0.000046505058,0.000058853245,0.000122258517,0.000033372221,0.000036599218,0.000057897213,0.000038581584,0.000029782093,0.000034321455,0.000033419439,0.000028000384,0.000022216768,0.000049093604,0.000037680404,0.000027718191,0.000041145392,0.000019972652,0.000026706081,0.000024692805,0.000020762762,0.000022280465,0.000019260576,0.000041582342,0.00002319621,0.000021417449,0.000013569436,0.000013305161,0.000020510924,0.000016856306,0.000017829163,0.000017586607,0.000014344649,0.000029504329,0.000012232365,0.000016246568,0.000010810701,0.000011242747,0.000012950623,0.000014343345,0.000004955366,0.000011951801,0.000012544581,0.000007693007,0.000009861878,0.000009821306,0.000005186952,0.000004696552,0.000010524605,0.000007003904,0.00000260266,0.000005382042,0.000008817769,0.000006458565,0.000003174985,0.000005318567,0.000007298882,0.000002579202,0.000005072772,0.000006993186,0.000002680664,0.000002753823,0.000004468801,0.000001734064,0.000002327535,0.000004401337,0.000003979145,9.38484e-7,0.000002557912,0.000004431243,0.000003704161,0.000001046997,0.000002830257,0.000002463495,0.000001796758,0.00000145171,0.000002269825,5.12088e-7,0.000001725947,0.000002285277,8.12064e-7,6.30249e-7,0.000001363241,0.000001304286,6.05613e-7,6.93015e-7,0.000001853148,3.94106e-7,5.6784e-7,0.000001127277,5.75992e-7,2.6911e-7,6.04403e-7,0.000001120191,2.46647e-7,3.57721e-7,9.539e-7,3.57579e-7,5.12338e-7,4.16677e-7,1.84059e-7,1.87727e-7,4.46226e-7,8.28725e-7,1.80498e-7,3.31769e-7,3.02255e-7,6.6113e-8,3.3074e-8,3.02184e-7,1.80605e-7,2.43086e-7,3.61282e-7,9.2065e-8,3.3038e-8,1.84202e-7,1.80641e-7,3.561e-9,7.121e-9,2.69145e-7,9.2065e-8,6.2552e-8,6.6148e-8,1.21614e-7,3.3038e-8,3.3074e-8,2.39668e-7,2.9513e-8,7.121e-9,6.2587e-8,6.2552e-8,2.9478e-8,3.3074e-8,1.25175e-7,0,3.561e-9,6.2587e-8,3.561e-9,0,3.6635e-8,1.18054e-7,2.9478e-8,3.3074e-8,2.9513e-8,3.561e-9,0,3.3074e-8,3.561e-9,0,0,3.6635e-8,0,0,3.3074e-8,0,0,3.3074e-8,0,0,0,2.9513e-8,3.561e-9,0,0,3.561e-9,0,0,3.561e-9,0,0,2.9513e-8,0,0,0,0,0,0,0,3.561e-9]},"13":{"maxTenths":447,"probs":[0.200513217778,0,0,0,0,0,0,0,0,0,0,0,0.000946675801,0,0,0.000947821868,0,0,0.000946675801,0,0,0,0,0.029483773348,0,0,0,0.028539812778,0.021919359211,0.007134274387,0.000950533816,0,0.028537097548,0.000002715231,0.007134274387,0.022952052017,0.029483773348,0,0.000088836371,0.000086017006,0.014505973311,0.028647330753,0.022008195582,0.000065324842,0.00105536916,0.028623118114,0.00832795981,0.001119547046,0.000091444184,0.021940889496,0.009588481831,0.009354500813,0.00076687358,0.000242929089,0.001172299225,0.005184067402,0.023211571862,0.008590507795,0.002349043656,0.006260611695,0.00952408588,0.001449704635,0.002785165839,0.026680839663,0.005929152728,0.002929412023,0.000795587461,0.003685243819,0.007428658373,0.005603725091,0.033330415692,0.002984901793,0.006829764755,0.006505671164,0.00529050862,0.00204750931,0.006291647612,0.007061876407,0.00484299716,0.003785812866,0.010503095127,0.006276961213,0.004946113313,0.006324901734,0.003692905912,0.005392780515,0.006079521041,0.004671534363,0.003477401291,0.003153311214,0.013495797923,0.00628937004,0.005511369867,0.004559036626,0.003601961164,0.004456105199,0.003294556703,0.006141824268,0.005327225405,0.004447093412,0.00902832549,0.003735945191,0.005044948818,0.002319707084,0.004631834836,0.006282081821,0.004804068762,0.00194820971,0.003487493011,0.003101883208,0.00219590278,0.003664969121,0.004621534867,0.002543061139,0.001814136353,0.004384465104,0.002732704893,0.002831211261,0.001671277826,0.004739480664,0.002015777825,0.00230796325,0.002261718058,0.002210905193,0.001109870554,0.002238695808,0.003898780637,0.003359035281,0.001425011851,0.001777950034,0.00167056787,0.001857241425,0.002315112971,0.003499726171,0.001109295029,0.002048241832,0.002383313808,0.001134503599,0.000907617495,0.001500257812,0.002251144278,0.001662029911,0.001353598814,0.00133470255,0.000955627347,0.001602293122,0.002563736982,0.000990684296,0.001590457974,0.001332397106,0.001395691531,0.000980179934,0.000676167639,0.001288977166,0.000880868364,0.000757996413,0.001116570759,0.000749388276,0.000613992664,0.000737283954,0.001263749101,0.000734889251,0.000675449414,0.001036543178,0.001552056767,0.000555292126,0.0004009878,0.000562051544,0.00071048274,0.000642346343,0.000816380768,0.000458481648,0.000544634957,0.00050824429,0.000592096266,0.000591003712,0.000470672796,0.000348772814,0.000479154817,0.000366338537,0.000378814844,0.000366946974,0.00145714678,0.000366532799,0.000354602356,0.000266506552,0.000269235749,0.000465003521,0.000292567085,0.000455097155,0.000335465768,0.000379594458,0.000276946556,0.000258665146,0.000199553793,0.000266734989,0.000337466105,0.000341846734,0.000178943181,0.000265322101,0.000186152422,0.000133127987,0.000203882546,0.000213442862,0.000229044225,0.0003486827,0.000214683758,0.000119302131,0.000107164257,0.000382612831,0.000186791255,0.000176291227,0.000084730255,0.000160910533,0.000181397931,0.000111894494,0.000200638087,0.000174470704,0.000228980086,0.000103956482,0.000137702654,0.000083802897,0.00009242506,0.000179483039,0.000152697882,0.000054313649,0.00008721829,0.000223730686,0.000093653879,0.000053091567,0.000052690341,0.000120075303,0.000079002993,0.000097135596,0.00012933297,0.000040592739,0.000067532046,0.000040917218,0.000139056891,0.000063124336,0.000048622707,0.000046385882,0.000059530914,0.000033961611,0.000061021453,0.000112812572,0.00006244558,0.000031604306,0.000048240876,0.000031708479,0.000046750841,0.000033319903,0.000121763737,0.000031243886,0.000060793775,0.000026759001,0.000027618119,0.000023357556,0.000030238862,0.00003373716,0.000027943964,0.000025594053,0.000044175028,0.000028439037,0.000040196861,0.000029573864,0.000020183947,0.000020580266,0.000024747672,0.000024852601,0.000015752555,0.000012657864,0.000042907224,0.000017869206,0.000017923263,0.000019229205,0.000016745086,0.000013418272,0.000010369039,0.000022863388,0.000015107736,0.00001485187,0.000028564223,0.000016083586,0.000012199163,0.000006931669,0.00001268217,0.000015793385,0.000009899238,0.000008133033,0.000010604034,0.00000746692,0.000005113326,0.000008518871,0.000011392922,0.000006047728,0.000005430529,0.00001258466,0.000005365952,0.000007927068,0.000003741864,0.000008941804,0.000003667635,0.000004775541,0.00000528282,0.000004312312,0.000003059818,0.000003427932,0.000005901676,0.00000495177,0.000002934322,0.000003028519,0.000004473966,0.000003027775,0.00000357507,0.000005914177,0.000002135181,0.000003165908,0.000003296705,8.37874e-7,0.000001813171,0.000002138563,0.000002576529,0.000001940515,0.000002277196,0.000001274808,8.95548e-7,0.000002373746,0.000002046712,7.89672e-7,0.000003231058,0.000001356191,0.000001422125,7.896e-7,0.00000117904,0.000001603088,4.82718e-7,3.57579e-7,0.000001341064,9.8544e-7,3.94178e-7,4.23655e-7,0.000001363527,5.3822e-7,4.82539e-7,9.79853e-7,5.64136e-7,3.38854e-7,3.02113e-7,2.98623e-7,4.82754e-7,3.61104e-7,8.54678e-7,5.45448e-7,1.80605e-7,2.43121e-7,3.35258e-7,6.82226e-7,2.13679e-7,1.28664e-7,2.39668e-7,2.13679e-7,2.46682e-7,9.2065e-8,3.57686e-7,2.20837e-7,2.06558e-7,1.54653e-7,1.21614e-7,2.09976e-7,6.6148e-8,3.9076e-7,1.47567e-7,4.0196e-8,3.6635e-8,2.6562e-7,9.5626e-8,6.9673e-8,8.854e-8,1.51092e-7,3.6635e-8,8.8504e-8,1.25175e-7,3.3074e-8,3.3074e-8,1.25175e-7,1.18054e-7,8.8504e-8,1.0682e-8,3.3038e-8,2.9513e-8,3.6635e-8,3.3074e-8,8.854e-8,3.3074e-8,3.3074e-8,3.561e-9,3.3074e-8,0,3.3038e-8,1.25175e-7,2.9513e-8,3.3074e-8,3.561e-9,0,2.9513e-8,7.121e-9,0,0,3.561e-9,2.9513e-8,3.561e-9,3.3074e-8,0,3.561e-9,2.9513e-8,0,3.561e-9,3.561e-9,0,3.3074e-8,0,0,0,3.561e-9,0,0,0,0,3.561e-9,2.9513e-8,0,3.561e-9,0,0,3.561e-9,0,0,0,0,0,0,0,0,0,0,0,3.561e-9]}}};
+
+const LEVELS = DATA.levels;
+const MAXSCORE = {};
+const SUF = {};
+for (const L of LEVELS) {
+  const probs = DATA.histograms[String(L)].probs;
+  const s = new Float64Array(probs.length + 1);
+  for (let i = probs.length - 1; i >= 0; i--) s[i] = s[i + 1] + probs[i];
+  SUF[L] = s;
+  MAXSCORE[L] = DATA.histograms[String(L)].maxTenths / 10;
+}
+
+const state = { target: 15, price: 3.9, level: 11 };
+let curP = 0;
+
+const $ = (id) => document.getElementById(id);
+const elTarget = $('target');
+const elRange = $('targetRange');
+const elPrice = $('price');
+const elStatus = $('status');
+const elMaxHint = $('maxHint');
+const NF0 = new Intl.NumberFormat('zh-CN', { maximumFractionDigits: 0 });
+
+function trimZeros(s) {
+  return s.includes('.') ? s.replace(/0+$/, '').replace(/\.$/, '') : s;
+}
+function sigPct(x, sig) {
+  if (x === 0) return '0';
+  const d = Math.max(0, Math.min(15, sig - 1 - Math.floor(Math.log10(Math.abs(x)))));
+  return trimZeros(x.toFixed(d));
+}
+function pct(p) {
+  return sigPct(p * 100, 3) + '%';
+}
+function pctTable(p) {
+  const x = p * 100;
+  return trimZeros(x >= 1 ? x.toFixed(2) : x.toFixed(3)) + '%';
+}
+function pctAxis(x) {
+  if (x === 0) return '0';
+  return sigPct(x, 3) + '%';
+}
+function money(v) {
+  if (!isFinite(v)) return '—';
+  if (v <= 0) return '¥0';
+  if (v < 1000) return '¥' + v.toFixed(2);
+  if (v < 1e4) return '¥' + NF0.format(Math.round(v));
+  if (v < 1e8) return '¥' + (v < 1e6 ? trimZeros((v / 1e4).toFixed(1)) : NF0.format(Math.round(v / 1e4))) + '万';
+  return '¥' + trimZeros((v / 1e8).toFixed(2)) + '亿';
+}
+function compact(v) {
+  if (!isFinite(v)) return '—';
+  if (v < 1000) return String(Math.round(v));
+  if (v < 1e4) return NF0.format(Math.round(v));
+  if (v < 1e8) return (v < 1e6 ? trimZeros((v / 1e4).toFixed(1)) : NF0.format(Math.round(v / 1e4))) + '万';
+  return trimZeros((v / 1e8).toFixed(2)) + '亿';
+}
+function attempts(v) {
+  if (!isFinite(v)) return '—';
+  return v < 1000 ? v.toFixed(1) : compact(v);
+}
+
+function tail(level, t) {
+  const suf = SUF[level];
+  let i = Math.ceil(t * 10 - 1e-9);
+  if (i <= 0) return 1;
+  if (i >= suf.length - 1) return 0;
+  return suf[i];
+}
+function quantile(p, q) {
+  if (p >= 1) return 1;
+  if (p <= 0) return Infinity;
+  return Math.max(1, Math.ceil(Math.log(1 - q) / Math.log1p(-p) - 1e-9));
+}
+
+/* ---------------- KPIs ---------------- */
+function renderKpis() {
+  const lv = state.level;
+  const max = MAXSCORE[lv];
+  const p = tail(lv, state.target);
+  curP = p;
+  const reachable = p > 0;
+  const invalid = !isFinite(state.target) || state.target < 0;
+
+  if (invalid) {
+    $('kCost').textContent = '—';
+    $('kSub').innerHTML = '请输入目标分数';
+    $('kP').textContent = '—';
+    $('kN').textContent = '—';
+  } else if (!reachable) {
+    $('kCost').textContent = '—';
+    $('kSub').innerHTML = '目标高于 +' + lv + ' 上限 <b>' + max.toFixed(1) + '</b> 分';
+    $('kP').textContent = '0%';
+    $('kN').textContent = '—';
+  } else {
+    const exp = 1 / p;
+    $('kCost').textContent = money(exp * state.price);
+    $('kCost').title = '¥' + NF0.format(Math.round(exp * state.price)) + '（精确期望值）';
+    $('kSub').innerHTML = '≈ <b>' + attempts(exp) + '</b> 次 × <b>' + money(state.price) + '</b> / 次';
+    $('kP').textContent = pct(p);
+    $('kN').textContent = attempts(exp);
+  }
+
+  for (const q of [50, 90, 99]) {
+    const nEl = $('q' + q + 'n');
+    const cEl = $('q' + q + 'c');
+    if (!reachable || invalid) {
+      nEl.textContent = '—';
+      cEl.textContent = '—';
+      continue;
+    }
+    const n = quantile(p, q / 100);
+    nEl.textContent = compact(n) + ' 次';
+    cEl.textContent = money(n * state.price);
+    cEl.title = '¥' + NF0.format(Math.round(n * state.price));
+  }
+
+  if (!invalid && state.target > max + 1e-9) {
+    elStatus.classList.add('show');
+    elStatus.textContent = '当前 +' + lv + ' 最高只能到 ' + max.toFixed(1) + ' 分；把目标降下来，或切换更高的强化等级。';
+  } else {
+    elStatus.classList.remove('show');
+  }
+
+  elMaxHint.textContent = '+' + lv + ' 上限 ' + max.toFixed(1) + ' 分';
+  elRange.max = max;
+  elRange.value = Math.min(state.target, max);
+  const fill = max > 0 ? Math.min(100, Math.max(0, state.target / max * 100)) : 0;
+  elRange.style.setProperty('--fill', fill + '%');
+  syncPresets();
+}
+
+function syncPresets() {
+  document.querySelectorAll('.preset').forEach((b) => {
+    b.classList.toggle('active', Math.abs(parseFloat(b.dataset.t) - state.target) < 1e-9);
+  });
+}
+
+/* ---------------- charts ---------------- */
+const NS = 'http://www.w3.org/2000/svg';
+function S(tag, attrs, text) {
+  const e = document.createElementNS(NS, tag);
+  if (attrs) for (const k in attrs) e.setAttribute(k, attrs[k]);
+  if (text != null) e.textContent = text;
+  return e;
+}
+function niceStep(range, count) {
+  const raw = range / count;
+  const mag = Math.pow(10, Math.floor(Math.log10(raw)));
+  const norm = raw / mag;
+  const step = norm <= 1 ? 1 : norm <= 2 ? 2 : norm <= 5 ? 5 : 10;
+  return step * mag;
+}
+function axisRange(p) {
+  if (p >= 1) return { nmax: 20, log: false };
+  const q99 = quantile(p, 0.99);
+  if (q99 > 260) {
+    return { nmax: Math.pow(10, Math.ceil(Math.log10(q99))), log: true };
+  }
+  const base = Math.max(20, q99);
+  const step = niceStep(base, 5);
+  return { nmax: Math.ceil(base / step) * step, log: false };
+}
+
+const CHARTS = {
+  pmf: { box: $('chartPmf'), tip: $('tipPmf'), isPmf: true },
+  cdf: { box: $('chartCdf'), tip: $('tipCdf'), isPmf: false },
+};
+
+function valueAt(n, p, isPmf) {
+  if (isPmf) {
+    if (n < 1) return 0;
+    if (p >= 1) return n === 1 ? 1 : 0;
+    return p * Math.exp((n - 1) * Math.log1p(-p));
+  }
+  if (n <= 0) return 0;
+  if (p >= 1) return 1;
+  return -Math.expm1(n * Math.log1p(-p));
+}
+
+function drawChart(which) {
+  const c = CHARTS[which];
+  const box = c.box;
+  const p = curP;
+  const W = Math.round(box.clientWidth || 640);
+  c.lastW = W;
+  const H = Math.round(box.clientHeight || 252);
+  box.replaceChildren();
+  c.tip.classList.remove('show', 'below');
+
+  if (!(p > 0) || !isFinite(p)) {
+    const d = document.createElement('div');
+    d.className = 'chart-empty';
+    d.textContent = '这个目标分数在当前等级下无法达成';
+    box.appendChild(d);
+    return;
+  }
+
+  let yStep, yTop;
+  if (c.isPmf) {
+    yStep = niceStep(p, 3);
+    yTop = Math.ceil(p / yStep - 1e-12) * yStep;
+  } else {
+    yStep = 0.25;
+    yTop = 1;
+  }
+  const yLabels = [];
+  for (let v = 0; v <= yTop + 1e-12; v += yStep) {
+    yLabels.push(c.isPmf ? pctAxis(v * 100) : Math.round(v * 100) + '%');
+  }
+  const maxYLen = Math.max(...yLabels.map((s) => s.length));
+  const M = { l: Math.max(46, Math.ceil(maxYLen * 5.9) + 14), r: 16, t: 16, b: 52 };
+  const pw = Math.max(10, W - M.l - M.r);
+  const ph = Math.max(10, H - M.t - M.b);
+  const rng = axisRange(p);
+  const nmax = rng.nmax;
+  const log = rng.log;
+  const lgMax = Math.log10(nmax);
+  const X = (n) => log
+    ? M.l + (Math.log10(Math.max(n, 1)) / lgMax) * pw
+    : M.l + (n / nmax) * pw;
+  const Y = (v) => M.t + ph - (Math.min(v, yTop) / yTop) * ph;
+
+  const svg = S('svg', {
+    width: W, height: H, viewBox: '0 0 ' + W + ' ' + H,
+    role: 'img',
+    'aria-label': c.isPmf
+      ? '恰好第 N 次成功的概率曲线，单次达标率 ' + pct(p)
+      : 'N 次以内至少成功一次的累计概率曲线',
+  });
+
+  const defs = S('defs');
+  const gid = 'g-' + which;
+  const grad = S('linearGradient', { id: gid, x1: '0', y1: '0', x2: '0', y2: '1' });
+  grad.appendChild(S('stop', { offset: '0', 'stop-color': c.isPmf ? '#46d5ef' : '#f0c46a', 'stop-opacity': c.isPmf ? '0.32' : '0.15' }));
+  grad.appendChild(S('stop', { offset: '1', 'stop-color': c.isPmf ? '#46d5ef' : '#f0c46a', 'stop-opacity': '0' }));
+  defs.appendChild(grad);
+  svg.appendChild(defs);
+
+  // x ticks
+  let xTicks = [];
+  if (log) {
+    for (let e = 0; e <= Math.round(lgMax); e++) xTicks.push(Math.pow(10, e));
+    const maxLabels = Math.max(2, Math.floor(pw / 48));
+    if (xTicks.length > maxLabels) {
+      const D = xTicks.length - 1;
+      const stride = Math.max(1, Math.ceil(D / (maxLabels - 1)));
+      xTicks = xTicks.filter((_, i) => i % stride === 0);
+    }
+  } else {
+    const step = niceStep(nmax, 5);
+    for (let v = 0; v <= nmax + 1e-9; v += step) xTicks.push(v);
+  }
+  // y ticks
+  const yTicks = [];
+  for (let v = 0; v <= yTop + 1e-12; v += yStep) yTicks.push(v);
+
+  // grid
+  for (const t of xTicks) {
+    svg.appendChild(S('line', {
+      x1: X(t), y1: M.t, x2: X(t), y2: M.t + ph,
+      stroke: 'rgba(255,255,255,.05)', 'stroke-width': 1,
+    }));
+  }
+  for (const v of yTicks) {
+    svg.appendChild(S('line', {
+      x1: M.l, y1: Y(v), x2: M.l + pw, y2: Y(v),
+      stroke: 'rgba(255,255,255,.055)', 'stroke-width': 1,
+    }));
+  }
+
+  // curves
+  const pts = [];
+  const N = 420;
+  if (log) {
+    for (let i = 0; i <= N; i++) {
+      const n = Math.pow(10, (lgMax * i) / N);
+      pts.push([n, valueAt(n, p, c.isPmf)]);
+    }
+  } else {
+    for (let i = 0; i <= N; i++) {
+      const n = (nmax * i) / N;
+      pts.push([n, valueAt(n, p, c.isPmf)]);
+    }
+  }
+  const baseX = log ? X(1) : X(0);
+  let area = 'M ' + baseX + ' ' + Y(0);
+  for (const [n, v] of pts) area += ' L ' + X(n) + ' ' + Y(v);
+  area += ' L ' + X(nmax) + ' ' + Y(0) + ' Z';
+  svg.appendChild(S('path', { d: area, fill: 'url(#' + gid + ')' }));
+
+  let line = '';
+  pts.forEach(([n, v], i) => { line += (i ? ' L ' : 'M ') + X(n) + ' ' + Y(v); });
+  svg.appendChild(S('path', {
+    d: line, fill: 'none', stroke: c.isPmf ? '#46d5ef' : '#f0c46a',
+    'stroke-width': 2, 'stroke-linejoin': 'round', 'stroke-linecap': 'round',
+  }));
+
+  // 90% marker on CDF
+  if (!c.isPmf && p < 1) {
+    const q90 = quantile(p, 0.9);
+    const mx = X(q90), my = Y(0.9);
+    svg.appendChild(S('line', {
+      x1: M.l, y1: my, x2: M.l + pw, y2: my,
+      stroke: 'rgba(240,196,106,.32)', 'stroke-width': 1, 'stroke-dasharray': '4 5',
+    }));
+    svg.appendChild(S('circle', {
+      cx: mx, cy: my, r: 4, fill: '#f0c46a', stroke: '#0a0f18', 'stroke-width': 2,
+    }));
+    const nearRight = mx > M.l + pw - 66;
+    svg.appendChild(S('text', {
+      x: nearRight ? mx - 10 : mx + 10, y: my - 9,
+      fill: '#f7d695', 'font-size': 10, 'font-weight': 600,
+      'text-anchor': nearRight ? 'end' : 'start',
+      stroke: '#0a0f18', 'stroke-width': 3, 'paint-order': 'stroke',
+      'stroke-linejoin': 'round',
+    }, '90% 把握'));
+  }
+
+  // axes labels
+  for (const t of xTicks) {
+    const x = X(t);
+    svg.appendChild(S('text', {
+      x, y: M.t + ph + 17, fill: '#8b95a8', 'font-size': 10,
+      'text-anchor': x < M.l + 12 ? 'start' : x > M.l + pw - 12 ? 'end' : 'middle',
+    }, compact(t)));
+    svg.appendChild(S('text', {
+      x, y: M.t + ph + 33, fill: 'rgba(240,196,106,.75)', 'font-size': 10,
+      'text-anchor': x < M.l + 12 ? 'start' : x > M.l + pw - 12 ? 'end' : 'middle',
+    }, money(t * state.price)));
+  }
+  yTicks.forEach((v, i) => {
+    svg.appendChild(S('text', {
+      x: M.l - 9, y: Y(v) + 3.5, fill: '#8b95a8', 'font-size': 10, 'text-anchor': 'end',
+    }, yLabels[i]));
+  });
+
+  // hover layer
+  const hoverLine = S('line', {
+    y1: M.t, y2: M.t + ph, stroke: 'rgba(255,255,255,.24)',
+    'stroke-width': 1, 'stroke-dasharray': '3 4', opacity: 0,
+  });
+  const hoverDot = S('circle', {
+    r: 4.5, fill: c.isPmf ? '#46d5ef' : '#f0c46a', stroke: '#0a0f18',
+    'stroke-width': 2, opacity: 0,
+  });
+  const overlay = S('rect', {
+    x: M.l, y: M.t, width: pw, height: ph, fill: 'transparent', style: 'cursor:crosshair',
+  });
+  svg.appendChild(hoverLine);
+  svg.appendChild(hoverDot);
+  svg.appendChild(overlay);
+  box.appendChild(svg);
+
+  const showTip = (ev) => {
+    const r = svg.getBoundingClientRect();
+    let t = (ev.clientX - r.left - M.l) / pw;
+    t = Math.max(0, Math.min(1, t));
+    let n = log ? Math.round(Math.pow(10, t * lgMax)) : Math.round(t * nmax);
+    n = Math.max(1, Math.min(nmax, n));
+    const v = valueAt(n, p, c.isPmf);
+    const px = X(n), py = Y(v);
+    hoverLine.setAttribute('x1', px);
+    hoverLine.setAttribute('x2', px);
+    hoverLine.setAttribute('opacity', 1);
+    hoverDot.setAttribute('cx', px);
+    hoverDot.setAttribute('cy', py);
+    hoverDot.setAttribute('opacity', 1);
+    c.tip.innerHTML =
+      '<div>第 <b>' + NF0.format(n) + '</b> 次</div>' +
+      '<div>本次成功 <b>' + pct(valueAt(n, p, true)) + '</b></div>' +
+      '<div>累计成功 <b>' + pct(valueAt(n, p, false)) + '</b></div>' +
+      '<div>累计花费 <b class="g">' + money(n * state.price) + '</b></div>';
+    c.tip.style.left = Math.max(96, Math.min(W - 96, px)) + 'px';
+    c.tip.style.top = py + 'px';
+    c.tip.classList.toggle('below', py < 86);
+    c.tip.classList.add('show');
+  };
+  overlay.addEventListener('pointermove', showTip);
+  overlay.addEventListener('pointerdown', showTip);
+  overlay.addEventListener('pointerleave', () => {
+    hoverLine.setAttribute('opacity', 0);
+    hoverDot.setAttribute('opacity', 0);
+    c.tip.classList.remove('show');
+  });
+}
+
+let rafId = 0;
+function scheduleCharts() {
+  if (rafId) return;
+  rafId = requestAnimationFrame(() => {
+    rafId = 0;
+    drawChart('pmf');
+    drawChart('cdf');
+    updateChartSubs();
+  });
+}
+function updateChartSubs() {
+  const p = curP;
+  const log = p > 0 && axisRange(p).log;
+  $('pmfSub').textContent = p > 0
+    ? '单次达标 ' + pct(p) + ' · 下排横轴为累计花费' + (log ? ' · 横轴对数刻度' : '')
+    : '当前目标无法达成';
+  $('cdfSub').textContent = p > 0
+    ? '累计概率' + (p < 1 ? ' · 90% 把握 = ' + compact(quantile(p, 0.9)) + ' 次 · ' + money(quantile(p, 0.9) * state.price) : ' · 目标为 0 分，必定成功')
+    : '当前目标无法达成';
+}
+
+/* ---------------- table ---------------- */
+function renderTable() {
+  const lv = state.level;
+  $('thLevel').textContent = '+' + lv;
+  const groups = [
+    { cls: '', title: '强化词条 · 单格 0.833%', rows: DATA.entries.filter((e) => e.isEnh) },
+    { cls: '', title: '计分词条 · 单格 6.5%', rows: DATA.entries.filter((e) => !e.isEnh && !e.zero) },
+    { cls: 'zero', title: '原网页不计分词条 · 单格 6.5%', rows: DATA.entries.filter((e) => e.zero) },
+  ];
+  let html = '';
+  for (const g of groups) {
+    html += '<tr class="group-row ' + g.cls + '"><th colspan="5" scope="colgroup">' + g.title + '</th></tr>';
+    for (const e of g.rows) {
+      const n = e.values.length;
+      const per = (e.appearProb / n) * 100;
+      const scores = e.values.map((v) => v.scores[String(lv)]);
+      const anyZero = scores.some((s) => s === 0);
+      const badges =
+        (e.isEnh ? '<span class="badge enh">强化系数</span>' : '') +
+        (e.zero ? '<span class="badge zero">不计分</span>' : anyZero ? '<span class="badge part">低档 0 分</span>' : '');
+      let chips = '';
+      for (let i = e.values.length - 1; i >= 0; i--) {
+        const v = e.values[i];
+        const sc = v.scores[String(lv)];
+        const val = e.isEnh ? v.value.toFixed(2) : v.value.toFixed(1) + '%';
+        chips += '<span class="chip' + (sc === 0 ? ' zero' : '') + (e.isEnh ? ' enh' : '') +
+          '" title="' + val + ' → ' + sc.toFixed(1) + ' 分">' +
+          '<b>' + val + '</b><span class="arr">→</span><em>' + sc.toFixed(1) + '</em></span>';
+      }
+      const titleAttr = e.nameSC !== e.name ? ' title="' + e.name + '"' : '';
+      html += '<tr>' +
+        '<td><div class="ename"' + titleAttr + '>' + e.nameSC + '</div>' + badges + '</td>' +
+        '<td class="num" data-label="单格概率">' + pctTable(e.slotProb) + '</td>' +
+        '<td class="num" data-label="每次变换">' + pctTable(e.appearProb) + '</td>' +
+        '<td class="num" data-label="单档概率">' + (per >= 1 ? trimZeros(per.toFixed(2)) : trimZeros(per.toFixed(3))) + '%</td>' +
+        '<td class="chips-cell" data-label="数值 → 分值（+' + lv + '）"><div class="chips">' + chips + '</div></td>' +
+        '</tr>';
+    }
+  }
+  $('tableBody').innerHTML = html;
+}
+
+/* ---------------- wiring ---------------- */
+let lastTarget = 15;
+function readTarget() {
+  const v = parseFloat(elTarget.value);
+  if (!isFinite(v) || elTarget.value.trim() === '') {
+    state.target = 0;
+    return;
+  }
+  state.target = Math.max(0, v);
+  lastTarget = state.target;
+}
+function render() {
+  renderKpis();
+  scheduleCharts();
+}
+
+elTarget.addEventListener('input', () => {
+  readTarget();
+  render();
+});
+elTarget.addEventListener('blur', () => {
+  let v = parseFloat(elTarget.value);
+  if (!isFinite(v) || elTarget.value.trim() === '') v = lastTarget;
+  v = Math.max(0, v);
+  elTarget.value = String(v);
+  state.target = v;
+  lastTarget = v;
+  render();
+});
+elRange.addEventListener('input', () => {
+  state.target = parseFloat(elRange.value) || 0;
+  elTarget.value = state.target.toFixed(1);
+  render();
+});
+elPrice.addEventListener('input', () => {
+  const v = parseFloat(elPrice.value);
+  if (isFinite(v) && v > 0) {
+    state.price = v;
+    render();
+  }
+});
+elPrice.addEventListener('blur', () => {
+  const v = parseFloat(elPrice.value);
+  if (!(isFinite(v) && v > 0)) {
+    elPrice.value = '3.9';
+    state.price = 3.9;
+    render();
+  }
+});
+document.querySelectorAll('input[name="level"]').forEach((r) => {
+  r.addEventListener('change', () => {
+    if (!r.checked) return;
+    state.level = parseInt(r.value, 10);
+    renderTable();
+    render();
+  });
+});
+
+const presetValues = [15, 20, 25, 30];
+const presetBox = $('presets');
+for (const v of presetValues) {
+  const b = document.createElement('button');
+  b.type = 'button';
+  b.className = 'preset';
+  b.dataset.t = String(v);
+  b.textContent = v + ' 分';
+  b.addEventListener('click', () => {
+    state.target = v;
+    elTarget.value = String(v);
+    render();
+  });
+  presetBox.appendChild(b);
+}
+
+const ro = new ResizeObserver((entries) => {
+  let need = false;
+  for (const e of entries) {
+    const c = e.target === CHARTS.pmf.box ? CHARTS.pmf : CHARTS.cdf;
+    if (c.lastW !== Math.round(e.contentRect.width)) need = true;
+  }
+  if (need) scheduleCharts();
+});
+ro.observe(CHARTS.pmf.box);
+ro.observe(CHARTS.cdf.box);
+
+renderTable();
+render();
+</script>
+</body>
+</html>
