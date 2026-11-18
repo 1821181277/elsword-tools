@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>演算 · 电路配置模拟器</title>
+<title>电路配置模拟器</title>
 <style>
 :root{
   --c:#ff2f52; --c-soft:#ff9db0;
@@ -11,6 +11,8 @@
   --line:#4a1520; --line2:#2b0e15;
   --txt:#ecd9de; --dim:#a2858c; --dim2:#7a6068;
   --c-rgb:255,47,82; --warn:#ffb545; --ok:#39d98a; --sel:#7fe3ff;
+  --pcb-board:#2a0c14; --pcb-board2:#120509; --pcb-cell:#1d0b12; --pcb-cell2:#0d0509;
+  --pcb-copy:#2c0d16; --pcb-edge:rgba(255,47,82,.38); --pcb-grid:rgba(255,47,82,.07);
 }
 *{box-sizing:border-box}
 html,body{margin:0;padding:0}
@@ -44,6 +46,7 @@ button:focus-visible{outline:2px solid var(--sel);outline-offset:1px}
 .sw-green{background:#25e08a;box-shadow:0 0 7px #25e08a}
 .label{color:var(--dim2);font-size:12px;letter-spacing:1px;white-space:nowrap}
 .btn{padding:5px 11px;border:1px solid var(--line);border-radius:7px;background:#14070c;color:var(--dim);transition:.15s;white-space:nowrap}
+.chip:disabled{opacity:.35;cursor:not-allowed}
 .btn:hover{background:#25101a;color:var(--txt);border-color:#6d2131}
 .btn.primary{border-color:#7a2033;color:#ffd8e0;background:linear-gradient(180deg,#2a0d16,#1a0810)}
 
@@ -70,48 +73,89 @@ button:focus-visible{outline:2px solid var(--sel);outline-offset:1px}
 main{display:grid;grid-template-columns:minmax(0,1fr) 396px;gap:18px;align-items:start}
 .boards{display:grid;grid-template-columns:repeat(2,auto);gap:16px;align-content:start;justify-content:start}
 
-.board{border:1px solid var(--line);border-radius:12px;background:linear-gradient(180deg,rgba(46,14,24,.55),rgba(16,7,11,.85));padding:9px;position:relative;transition:.2s}
+.board{
+  border:1px solid var(--pcb-edge);border-radius:14px;padding:9px;position:relative;transition:.2s;
+  background:
+    radial-gradient(120% 90% at 50% -10%,rgba(var(--c-rgb),.10),transparent 60%),
+    repeating-linear-gradient(0deg,var(--pcb-grid) 0 1px,transparent 1px 12px),
+    repeating-linear-gradient(90deg,var(--pcb-grid) 0 1px,transparent 1px 12px),
+    linear-gradient(180deg,var(--pcb-board),var(--pcb-board2));
+  box-shadow:inset 0 1px 0 rgba(255,255,255,.06),0 14px 34px rgba(0,0,0,.38),0 0 40px rgba(var(--c-rgb),.14);
+}
 .board.blink{box-shadow:0 0 0 2px var(--warn),0 0 26px rgba(255,181,69,.35)}
 .bhead{display:flex;align-items:center;gap:8px;margin-bottom:7px;padding:0 1px}
 .bhead .bname{font-weight:700;letter-spacing:2px;font-size:13px}
-.bhead .bstat{font-size:11px;color:var(--dim2);letter-spacing:.5px}
+.bhead .bstat{font-size:11px;color:rgba(255,255,255,.45);letter-spacing:.5px}
 .bhead .bwarn{font-size:11px;color:var(--warn);margin-left:auto;white-space:nowrap}
 .bhead .bok{font-size:11px;color:var(--ok);margin-left:auto;white-space:nowrap}
 .grid{display:grid;grid-template-columns:repeat(4,60px);grid-template-rows:repeat(4,60px);gap:5px}
 
-.cell{position:relative;border-radius:7px;background:#1b0d12;border:1px solid #2c111a;overflow:hidden;cursor:pointer;transition:box-shadow .15s,transform .1s}
-.cell::before{content:"";position:absolute;inset:0;pointer-events:none;opacity:.5;
-  background:repeating-linear-gradient(45deg,rgba(255,255,255,.028) 0 5px,transparent 5px 11px),
-             repeating-linear-gradient(-45deg,rgba(255,255,255,.028) 0 5px,transparent 5px 11px)}
-.cell.empty{background:#150a0e;border-style:dashed;border-color:#2a1017}
-.cell.empty::before{opacity:.28}
-.cell:hover{border-color:#7d2739}
+.cell{
+  position:relative;border-radius:8px;overflow:visible;cursor:pointer;
+  background:
+    radial-gradient(120% 90% at 50% 0%,rgba(255,255,255,.045),transparent 55%),
+    linear-gradient(180deg,var(--pcb-cell),var(--pcb-cell2));
+  border:1px solid var(--pcb-edge);
+  box-shadow:inset 0 1px 0 rgba(255,255,255,.06),inset 0 -10px 18px rgba(0,0,0,.35);
+  transition:box-shadow .15s,transform .1s,border-color .15s;
+}
+.cell::before{content:"";position:absolute;inset:0;pointer-events:none;z-index:0;opacity:.20;
+  background:var(--c);
+  -webkit-mask:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 60 60'%3E%3Cg fill='none' stroke='white' stroke-width='1.2' stroke-linecap='round'%3E%3Cpath d='M30 4 56 30 30 56 4 30Z' opacity='.55'/%3E%3Cpath d='M30 12 48 30 30 48 12 30Z' opacity='.30'/%3E%3Cpath d='M30 4V12M30 48V56M4 30H12M48 30H56' opacity='.50'/%3E%3Cpath d='M8 8H18V16H24M52 8H42V16H36M8 52H18V44H24M52 52H42V44H36' opacity='.45'/%3E%3Ccircle cx='30' cy='30' r='2' fill='white' stroke='none' opacity='.6'/%3E%3C/g%3E%3C/svg%3E") center/100% 100% no-repeat;
+  mask:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 60 60'%3E%3Cg fill='none' stroke='white' stroke-width='1.2' stroke-linecap='round'%3E%3Cpath d='M30 4 56 30 30 56 4 30Z' opacity='.55'/%3E%3Cpath d='M30 12 48 30 30 48 12 30Z' opacity='.30'/%3E%3Cpath d='M30 4V12M30 48V56M4 30H12M48 30H56' opacity='.50'/%3E%3Cpath d='M8 8H18V16H24M52 8H42V16H36M8 52H18V44H24M52 52H42V44H36' opacity='.45'/%3E%3Ccircle cx='30' cy='30' r='2' fill='white' stroke='none' opacity='.6'/%3E%3C/g%3E%3C/svg%3E") center/100% 100% no-repeat}
+.cell::after{content:"";position:absolute;inset:4px;border-radius:6px;pointer-events:none;z-index:0;opacity:.75;
+  background:
+    linear-gradient(var(--pcb-edge),var(--pcb-edge)) left top/7px 1px no-repeat,
+    linear-gradient(var(--pcb-edge),var(--pcb-edge)) left top/1px 7px no-repeat,
+    linear-gradient(var(--pcb-edge),var(--pcb-edge)) right top/7px 1px no-repeat,
+    linear-gradient(var(--pcb-edge),var(--pcb-edge)) right top/1px 7px no-repeat,
+    linear-gradient(var(--pcb-edge),var(--pcb-edge)) left bottom/7px 1px no-repeat,
+    linear-gradient(var(--pcb-edge),var(--pcb-edge)) left bottom/1px 7px no-repeat,
+    linear-gradient(var(--pcb-edge),var(--pcb-edge)) right bottom/7px 1px no-repeat,
+    linear-gradient(var(--pcb-edge),var(--pcb-edge)) right bottom/1px 7px no-repeat}
+.cell.empty{background:rgba(0,0,0,.16);border-style:dashed;border-color:var(--pcb-edge)}
+.cell.empty::before{opacity:.12}
+.cell.empty::after{opacity:.22}
+.cell:hover{border-color:var(--c)}
 .cell.sel{border-color:var(--sel);box-shadow:0 0 0 1px var(--sel),0 0 14px rgba(127,227,255,.35);z-index:3}
+.cell.on{border-color:rgba(var(--c-rgb),.42);box-shadow:inset 0 0 14px rgba(var(--c-rgb),.07),inset 0 1px 0 rgba(255,255,255,.08)}
 .cell.flash{animation:flash .45s ease-in-out 3}
 @keyframes flash{0%,100%{box-shadow:0 0 0 0 rgba(255,181,69,0)}50%{box-shadow:0 0 0 2px var(--warn),0 0 18px rgba(255,181,69,.6)}}
-.wires{position:absolute;inset:0;width:100%;height:100%;pointer-events:none}
-.wires .glow{fill:none;stroke:var(--c);stroke-width:11;stroke-linecap:round;stroke-linejoin:round;opacity:0;filter:drop-shadow(0 0 5px var(--c));transition:opacity .18s}
-.wires .core{fill:none;stroke:#fff;stroke-width:3.4;stroke-linecap:round;stroke-linejoin:round;opacity:0;transition:opacity .18s}
+.wires{position:absolute;inset:0;width:100%;height:100%;pointer-events:none;z-index:1;overflow:visible}
+.wires .glow{fill:none;stroke:var(--c);stroke-width:15;stroke-linecap:butt;stroke-linejoin:round;opacity:0;filter:drop-shadow(0 0 6px var(--c)) drop-shadow(0 0 22px rgba(var(--c-rgb),.62));transition:opacity .18s}
+.wires .core{fill:none;stroke:#fff;stroke-width:8.5;stroke-linecap:butt;stroke-linejoin:round;opacity:0;filter:drop-shadow(0 0 2px rgba(255,255,255,.85));transition:opacity .18s}
 .cell.on .wires .glow{opacity:.95}
-.cell.on .wires .core{opacity:.82}
+.cell.on .wires .core{opacity:.95}
 .cell.dim .wires .glow{opacity:.14;filter:none}
 .cell.dim .wires .core{opacity:.09}
-.spark{position:absolute;width:9px;height:9px;margin:-4.5px 0 0 -4.5px;border-radius:50%;background:var(--warn);box-shadow:0 0 9px var(--warn);display:none;opacity:.95}
+.spark{position:absolute;width:9px;height:9px;margin:-4.5px 0 0 -4.5px;border-radius:50%;background:var(--warn);box-shadow:0 0 9px var(--warn);display:none;opacity:.95;z-index:2}
 .cell.sparked .spark{display:block;animation:pulse 1.1s infinite}
 @keyframes pulse{0%,100%{transform:scale(1);opacity:.95}50%{transform:scale(.55);opacity:.4}}
 .cell.need{border-color:rgba(255,181,69,.65);border-style:dashed}
 .cell.need .needtag{display:block}
 .needtag{display:none;position:absolute;left:0;top:0;font-size:9px;line-height:1;padding:2px 3px;color:#1a0f02;background:var(--warn);border-bottom-right-radius:6px;font-weight:700;letter-spacing:0;z-index:2}
-.copytag{display:none;position:absolute;right:0;bottom:0;font-size:9px;line-height:1;padding:2px 3px;color:#04170e;background:var(--ok);border-top-left-radius:6px;font-weight:700;z-index:2}
+.copytag{display:none;position:absolute;right:5px;top:5px;width:9px;height:9px;z-index:6;pointer-events:none;
+  filter:drop-shadow(0 0 5px var(--c)) drop-shadow(0 0 10px rgba(var(--c-rgb),.55))}
+.copytag::before,.copytag::after{content:"";position:absolute;background:var(--c);border-radius:1px;box-shadow:0 0 4px var(--c),0 0 0 .5px rgba(255,255,255,.35)}
+.copytag::before{left:3.5px;top:0;width:2px;height:9px}
+.copytag::after{left:0;top:3.5px;width:9px;height:2px}
 .cell.copy .copytag{display:block}
-.cell .lbl{position:absolute;left:0;right:0;bottom:0;padding:2px 4px 3px;font-size:9px;line-height:1.2;pointer-events:none;z-index:1;
-  display:flex;flex-direction:column;align-items:flex-start;border-radius:0 0 6px 6px;
-  background:linear-gradient(180deg,rgba(0,0,0,0),rgba(0,0,0,.62))}
-.cell .lbl .lt{color:#b3939c;letter-spacing:.3px}
-.cell .lbl .lv{display:none;color:#a98d95;font-size:8.5px;white-space:nowrap;letter-spacing:0}
+.cell.copy{background:
+  radial-gradient(120% 90% at 50% 0%,rgba(var(--c-rgb),.13),transparent 60%),
+  linear-gradient(180deg,var(--pcb-copy),var(--pcb-cell2));
+  box-shadow:inset 0 0 0 1px rgba(var(--c-rgb),.55),inset 0 0 16px rgba(var(--c-rgb),.10)}
+.cell.sel{box-shadow:0 0 0 1px var(--sel),0 0 14px rgba(127,227,255,.35)}
+.cell .lbl{position:absolute;left:3px;bottom:3px;max-width:calc(100% - 6px);padding:2px 5px;font-size:9px;line-height:1.25;pointer-events:none;z-index:3;
+  display:flex;flex-direction:column;align-items:flex-start;border-radius:5px;
+  background:rgba(0,0,0,.46);box-shadow:0 1px 4px rgba(0,0,0,.25);white-space:nowrap}
+.cell .lbl .lt{color:rgba(255,255,255,.62);letter-spacing:.3px}
+.cell .lbl .lv{display:none;color:rgba(255,255,255,.5);font-size:8.5px;white-space:nowrap;letter-spacing:0}
+.cell .lbl{opacity:0;transition:opacity .15s}
+.cell:hover .lbl,.cell.sel .lbl,#boards.showattr .cell .lbl{opacity:1}
+.cell:hover .lbl .lv,.cell.sel .lbl .lv,#boards.showattr .cell .lbl .lv{display:block}
 #boards.showattr .cell .lbl .lv{display:block}
 .cell.on .lbl .lt{color:#fff;text-shadow:0 0 6px var(--c)}
-.cell.on .lbl .lv{color:#ffe4ea}
+.cell.on .lbl .lv{color:var(--c-soft)}
 .cell.equip{background:radial-gradient(circle at 50% 50%,#123020,#0a1a12 70%);border:1px solid #2f7a4e;cursor:default}
 .cell.equip::before{opacity:.18}
 .cell.equip .eqwrap{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:1px;z-index:2}
@@ -205,10 +249,12 @@ main{display:grid;grid-template-columns:minmax(0,1fr) 396px;gap:18px;align-items
 .item.err{border-color:#6b4a12}
 .item .imain{flex:1;min-width:0}
 .item .iname{font-size:12px;color:var(--txt);word-break:break-all}
-.item .isub{font-size:11px;color:var(--dim2);margin-top:1px}
+.item .isub{font-size:11px;color:var(--dim2);margin-top:1px;line-height:1.5;word-break:break-all}
 .item .isub .tag{color:var(--ok)}
 .item .isub .bad{color:var(--warn)}
 .item .icount{flex:0 0 auto;font-size:12px;color:#fff;background:#3a1220;border:1px solid var(--line);border-radius:20px;padding:1px 8px;white-space:nowrap}
+.item .icopy{flex:0 0 auto;font-size:11px;color:var(--dim);background:transparent;border:1px solid var(--line2);border-radius:6px;padding:1px 6px;cursor:pointer;opacity:.7;transition:.15s}
+.item .icopy:hover,.item .icopy:focus-visible{opacity:1;color:#fff;border-color:var(--line)}
 .empty-note{color:var(--dim2);font-size:12px;text-align:center;padding:22px 8px;line-height:1.9}
 .warnitem{display:flex;gap:8px;padding:7px 8px;border-radius:7px;background:#1c0f07;border:1px solid #57380d;margin-bottom:5px;cursor:pointer;transition:.15s}
 .warnitem:hover{background:#2a1708;border-color:var(--warn)}
@@ -231,6 +277,38 @@ main{display:grid;grid-template-columns:minmax(0,1fr) 396px;gap:18px;align-items
 #toast.show{opacity:1;transform:translate(-50%,0)}
 .hint{font-size:11.5px;color:var(--dim2);padding:0 2px 10px}
 .hint b{color:var(--c-soft);font-weight:600}
+/* ---------------- 预设电路 ---------------- */
+.presetmodalcard{width:min(960px,100%);max-height:90vh;padding:16px 18px 14px;overflow:auto}
+.preset-head{display:flex;align-items:baseline;gap:12px;flex-wrap:wrap;margin-bottom:6px}
+.preset-head h3{margin:0;font-size:16px;letter-spacing:2px;color:var(--c-soft)}
+.preset-head span{font-size:11.5px;color:var(--dim2)}
+.preset-toolbar{display:flex;align-items:center;gap:12px;flex-wrap:wrap;padding:8px 0 11px;border-bottom:1px solid var(--line2);margin-bottom:12px}
+.preset-toolbar label{font-size:12px;color:var(--dim);display:flex;align-items:center;gap:7px}
+.preset-toolbar select{background:#200f16;color:var(--txt);border:1px solid var(--line);border-radius:6px;padding:4px 7px;font:12px inherit}
+.preset-toolbar select:focus{outline:1px solid var(--sel)}
+.preset-note{font-size:11px;color:var(--dim2);line-height:1.5}
+.preset-rot{display:flex;align-items:center;gap:3px;margin-left:auto}
+.preset-rot>span{font-size:11.5px;color:var(--dim);margin-right:4px}
+.rotbtn{padding:3px 8px;border:1px solid var(--line2);border-radius:6px;background:#140a0e;color:var(--dim);font-size:11px;cursor:pointer;transition:.12s}
+.rotbtn:hover{color:#fff;border-color:var(--line)}
+.rotbtn.active{border-color:var(--c);color:#fff;background:rgba(var(--c-rgb),.15)}
+.preset-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px}
+.pcard{display:flex;gap:10px;padding:10px;border:1px solid var(--line);border-radius:10px;align-items:center;
+  background:linear-gradient(180deg,rgba(255,255,255,.028),rgba(0,0,0,.08));transition:.15s}
+.pcard:hover{border-color:rgba(var(--c-rgb),.4);background:linear-gradient(180deg,rgba(var(--c-rgb),.06),rgba(0,0,0,.1))}
+.pthumb{flex:0 0 92px;width:92px;height:92px}
+.pthumb svg{width:100%;height:100%;display:block}
+.pmeta{min-width:0;display:flex;flex-direction:column;gap:4px;align-items:flex-start}
+.pname{font-size:13px;font-weight:600;color:#fff;letter-spacing:.5px}
+.pdesc{font-size:11px;color:var(--dim2);line-height:1.4}
+.pcard .btn{padding:4px 10px;font-size:11.5px;margin-top:2px}
+.preset-foot{margin-top:12px;text-align:right}
+@media (max-width:760px){
+  .preset-grid{grid-template-columns:1fr 1fr}
+}
+@media (max-width:600px){
+  .preset-grid{grid-template-columns:1fr}
+}
 @media (max-width:1180px){
   main{grid-template-columns:minmax(0,1fr)}
   .side{position:static;max-height:none}
@@ -261,7 +339,7 @@ window.addEventListener('error', function (ev) {
 <div class="app">
 
   <div class="topbar">
-    <div class="brand"><h1>演算 · 电路配置模拟器</h1><small>ELSWORD CIRCUIT PLANNER</small></div>
+    <div class="brand"><h1>电路配置模拟器</h1><small>ELSWORD CIRCUIT PLANNER</small></div>
     <span class="label">颜色</span>
     <div class="seg" id="colorSeg">
       <button data-color="red"><i class="swatch sw-red"></i>演算</button>
@@ -271,6 +349,7 @@ window.addEventListener('error', function (ev) {
     <div class="spacer"></div>
     <button class="btn" id="btnShot">截图导入</button>
     <button class="btn" id="btnDemo">载入示例</button>
+    <button class="btn" id="btnPreset">预设电路</button>
     <button class="btn" id="btnReset">全部清空</button>
     <button class="btn" id="btnExport">导出</button>
     <button class="btn" id="btnImport">导入</button>
@@ -303,8 +382,6 @@ window.addEventListener('error', function (ev) {
       <div class="vals">
         <button class="chip" id="btnOwned">已有</button>
         <button class="chip warn" id="btnNeeded">未有</button>
-        <button class="chip" id="btnCopy">复制</button>
-        <button class="chip" id="btnNoCopy">非复制</button>
       </div>
     </div>
     <div class="tb-group">
@@ -348,9 +425,10 @@ window.addEventListener('error', function (ev) {
       <li>电路必须<b>闭合</b>（所有接口都有对接、没有悬空线头）且<b>联通</b>（整组电路接在装备上）才会通电生效；未通电的电路会变暗，并在右侧「连线警告」中列出。</li>
       <li>装备格是电源与导体：任何指向装备格的接口都视为已对接，两块电路也可以借装备格连通。</li>
       <li>颜色对所有电路生效：红色=演算、蓝色=循环、绿色=复原。切换后 60 块电路一起变色，电路名称也随之改变。</li>
+      <li><b>预设电路</b>：顶栏「预设电路」提供目型电路、毕业电路、C 形电路、H 型电路四种单盘预设，方向 0°/90°/180°/270°；目型转 90° 得横向，毕业电路转 90° 得竖向。套用部位可选全部。</li>
       <li>属性：上衣 流血／技能初始化概率；下衣 两极化／强／弱；手套 技能伤害；鞋子 王伤／组队动速。</li>
       <li>数值：一般为 <code>0.7 / 0.8 / 0.9 / 1.0</code>，组队动速为 <code>0.5 / 0.6 / 0.7 / 0.8</code>。</li>
-      <li>T 型电路可勾选<b>复制</b>：它的效果等于所连相邻电路属性的一半（例如相邻三个 1.0 流血 ≈ 1.5 流血）。复制电路彼此相邻会互相拖累，页面会给出提醒。</li>
+      <li>T 型电路可在<b>数值</b>里选「复制」：复制电路没有固定属性/数值，效果等于所连相邻电路属性的一半（例如相邻三个 1.0 流血 ≈ 1.5 流血）。复制电路彼此相邻会互相拖累，页面会给出提醒。</li>
     </ul>
     <h3>截图导入</h3>
     <ul>
@@ -359,24 +437,53 @@ window.addEventListener('error', function (ev) {
       <li>识别原理：霓虹线的中心接近纯白，而底盘是暗红、格子描边是纯红、徽章是绿，所以按「白芯」抠线即可（阈值自动适应，被缩放/重编码变淡的图也能认）；格距用投影自相关求，与图片分辨率无关；再对「装备格锚点 / 线路范围中心 / 图片中心」三种候选各拟合并打分，取接口咬合最好的那个。因此<strong>截图被缩放、裁剪、甚至非等比拉伸</strong>都能自动对齐。</li>
       <li>右侧「<b>自检：n/4 盘完整闭合联通</b>」是关键指标：显示 <b>4/4 ✓</b> 就说明识别和截图的电路完全一致；不满 4/4 时调「横向缩放 / 纵向缩放 / 左右 / 上下 / 灵敏度」，或者直接在图上拖动、点「复位」回到自动结果，直到变成 4/4。</li>
       <li><b>复制芯片</b>也能识别：芯片右上角有个小「十」字标识（颜色跟随主题，演算红／复原绿／循环蓝），识别结果按「中心横竖都亮、四对角都暗」的加号响应判定，并在预览里画出黄色十字；识别错了可以在图上点那一格、再点「复制芯片：是/否」手工纠正。</li>
-      <li>导入<b>只决定电路形状</b>（以及是不是复制芯片）：原本已有电路的属性、数值、复制、已有状态都会沿用；截图里没有电路的位置会被清空；新格按勾选（默认「已有」）标记。若勾了「按截图配色切换颜色」，会同时把 60 块电路切到截图对应的演算/循环/复原。</li>
+      <li>导入<b>只决定电路形状</b>（以及是不是复制芯片）：原本已有电路的属性、数值、已有状态都会沿用；截图里没有电路的位置会被清空；新格按勾选（默认「已有」）标记。若勾了「按截图配色切换颜色」，会同时把 60 块电路切到截图对应的演算/循环/复原。</li>
       <li>导入后可以 <code>Ctrl+Z</code> 撤销。</li>
     </ul>
     <h3>操作</h3>
     <ul>
-      <li><b>看某一块电路</b>：单击它，右侧最上方的「当前电路」卡片会显示完整名称（如 L-1型上衣增幅电路（演算））、部位、属性、数值、已有／未有、是否复制与通电状态，并可用下拉框直接改类型／属性／数值。</li>
-      <li>鼠标悬停在任意电路上也会浮出同样的信息；电路格底部默认显示类型，开启工具栏「格上显示属性」后会同时显示属性与数值。</li>
+      <li><b>看某一块电路</b>：单击它，右侧最上方的「当前电路」卡片会显示完整名称（如 L-1型上衣增幅电路（演算））、部位、属性、数值、已有／未有（用顶部「状态」按钮切换）、通电状态，并可用下拉框直接改类型／属性／数值（T 型可选「复制」）。</li>
+      <li>鼠标悬停或选中电路格时显示类型与属性；开启工具栏「格上显示属性」后会常显。</li>
       <li><b>选择模式</b>：单击选中（此时上方按钮会切换成这块电路的属性，点一下就是改它）；拖拽框选可跨部位批量；<code>Shift+单击</code> 加选／取消；<code>Ctrl+A</code> 全选；<code>Esc</code> 取消选择。</li>
-      <li><b>画笔模式</b>：按住拖拽即可按当前画笔（类型／属性／数值／已有状态／复制）连续涂画。</li>
+      <li><b>画笔模式</b>：按住拖拽即可按当前画笔（类型／属性／数值（含复制）／已有状态）连续涂画。</li>
       <li>上方工具栏的按钮：<b>有选中</b>时显示的是选中电路的属性，点击即批量套用；<b>没有选中</b>时只改变画笔。</li>
       <li>快捷键：<code>1</code>~<code>9</code>/<code>0</code> 切换类型、<code>R</code> 旋转、<code>Delete</code> 清空选中、<code>Ctrl+Z</code> 撤销。</li>
-      <li>标记为<b>未有</b>的电路会带橙色虚线边框与「缺」角标，并出现在右侧清单中；点清单或警告里的条目会自动选中并高亮对应电路。</li>
+      <li>标记为<b>未有</b>的电路会带橙色虚线边框与「缺」角标，并出现在右侧清单中；点清单或警告里的条目会自动选中并高亮对应电路。清单每行右侧有「复制名称」和「复制属性」：前者复制电路名字，后者复制按模板生成的属性描述（n% 替换为数值，无 n% 的追加 +数值）；都不会触发高亮。点行本身仍然高亮定位。</li>
       <li>配置会自动保存在浏览器本地；「导出／导入」可保存为 JSON 文件。</li>
     </ul>
     <div style="margin-top:18px;text-align:right"><button class="btn primary" id="btnHelpClose">知道了</button></div>
   </div>
 </div>
 
+<div class="modal" id="presetModal">
+  <div class="modalcard presetmodalcard">
+    <div class="preset-head">
+      <h3>预设电路</h3>
+      <span>只改变电路形状/类型，与颜色无关；原有格保留属性/数值/已有（T 型的复制值也保留，非 T 会清掉复制值），新格补该部位默认属性。</span>
+    </div>
+    <div class="preset-toolbar">
+      <label>套用部位
+        <select id="presetPart">
+          <option value="top">上衣</option>
+          <option value="bottom">下衣</option>
+          <option value="gloves">手套</option>
+          <option value="shoes">鞋子</option>
+          <option value="all">全部四件套</option>
+        </select>
+      </label>
+      <span class="preset-note">预览按「套用部位」显示该部位固定的装备角；方向只旋转形状，装备角不变。选「全部」时预览用上衣，实际四盘各按自身装备角。</span>
+      <div class="preset-rot" role="group" aria-label="预设方向">
+        <span>方向</span>
+        <button type="button" class="rotbtn active" data-rot="0">0°</button>
+        <button type="button" class="rotbtn" data-rot="1">90°</button>
+        <button type="button" class="rotbtn" data-rot="2">180°</button>
+        <button type="button" class="rotbtn" data-rot="3">270°</button>
+      </div>
+    </div>
+    <div class="preset-grid" id="presetGrid"></div>
+    <div class="preset-foot"><button class="btn" id="presetClose">关闭</button></div>
+  </div>
+</div>
 <div id="toast"></div>
 <div id="tip" class="tip"></div>
 
@@ -462,10 +569,54 @@ var PART_DEFS = [
   { id: 'shoes',  label: '鞋子', glyph: '🥾', attrs: ['王伤', '组队动速'],       equip: 0  }
 ];
 
+/* ---------- 预设电路：只定义形状（类型/位置），与颜色、是否复制无关 ---------- */
+var PRESET_BASES = {
+  /* 图1 左：上衣（装备 15，右下）竖向 H */
+  hV: { name: '目型电路', equip: 15, cells: [
+    'L-2', 'T-1', 'T-1', 'L-3',
+    'I-1', 'I-1', 'I-1', 'I-1',
+    'I-1', 'I-1', 'I-1', 'I-1',
+    'L-1', 'T-3', 'T-3', null
+  ] },
+  /* 图2：毕业电路，单个部位；除三个拐角 L 外其余 12 格全是 T */
+  gradH: { name: '毕业电路', equip: 15, cells: [
+    'L-2', 'T-1', 'T-1', 'L-3',
+    'T-4', 'T-3', 'T-3', 'T-2',
+    'T-4', 'T-1', 'T-1', 'T-2',
+    'L-1', 'T-3', 'T-3', null
+  ] },
+  /* 图4：L 型蛇形，装备 12（左下） */
+  lShape: { name: 'C 形电路', equip: 12, cells: [
+    'L-2', 'I-2', 'I-2', 'L-3',
+    'I-1', 'L-2', 'I-2', 'L-4',
+    'I-1', 'L-1', 'I-2', 'L-3',
+    null,  'I-2', 'I-2', 'L-4'
+  ] },
+  /* 第二种 L：格状 L，装备 3（右上，手套图） */
+  lShape2: { name: 'H 型电路', equip: 3, cells: [
+    'L-2', 'I-2', 'I-2', null,
+    'L-1', 'L-3', 'L-2', 'L-4',
+    'L-2', 'L-4', 'L-1', 'L-3',
+    'L-1', 'I-2', 'I-2', 'L-4'
+  ] }
+};
+var PRESET_DEFS = [
+  { key: 'hV',      base: 'hV',      name: '目型电路', desc: '单盘 · 0° 目型 / 90° 横向', scope: 'part' },
+  { key: 'gradH',   base: 'gradH',   name: '毕业电路', desc: '单盘 · 多 T，0° 横向 / 90° 竖向', scope: 'part' },
+  { key: 'lShape',  base: 'lShape',  name: 'C 形电路', desc: '单盘 · C 形走线', scope: 'part' },
+  { key: 'lShape2', base: 'lShape2', name: 'H 型电路', desc: '单盘 · H 型走线', scope: 'part' }
+];
+
 var COLORS = {
   red:   { name: '演算', hex: '#ff2f52', soft: '#ff9db0', rgb: '255,47,82' },
   blue:  { name: '循环', hex: '#2f9bff', soft: '#9fd4ff', rgb: '47,155,255' },
   green: { name: '复原', hex: '#25e08a', soft: '#a5f5cf', rgb: '37,224,138' }
+};
+/* 电路盘/格子的 PCB 底色，与线色分开，切换主题时一起换 */
+var PCB = {
+  red:   { board:'#2c0d16', board2:'#120509', cell:'#220d15', cell2:'#0e060a', copy:'#34101c', edge:'rgba(255,47,82,.42)',  grid:'rgba(255,47,82,.08)' },
+  blue:  { board:'#0b2032', board2:'#050d15', cell:'#0e2a3e', cell2:'#061620', copy:'#123a55', edge:'rgba(47,155,255,.42)', grid:'rgba(47,155,255,.08)' },
+  green: { board:'#04150c', board2:'#020a06', cell:'#061c10', cell2:'#030d08', copy:'#082418', edge:'rgba(37,224,138,.48)', grid:'rgba(37,224,138,.07)' }
 };
 
 var ATTR_VALUES = { '组队动速': [0.5, 0.6, 0.7, 0.8] };
@@ -475,7 +626,25 @@ var VALUE_CHOICES = [0.5, 0.6, 0.7, 0.8, 0.9, 1.0];
 var ATTR_SHORT = { '技能初始化概率': '技初', '两极化': '两极', '技能伤害': '技伤', '组队动速': '动速' };
 function shortAttr(a) { return ATTR_SHORT[a] || a; }
 
+var ATTR_TEXT = {
+  '流血': '攻击时，在3秒内造成攻击伤害{n}%的额外伤害',
+  '技能初始化概率': '使用技能时，{n}%概率该技能的冷却时间初始化',
+  '两极化': '两极化：攻击/被击伤害 +{n}%',
+  '强': '攻击HP50%以上的敌人时伤害增加 +{n}%',
+  '弱': '攻击HP50%以下的敌人时伤害增加 +{n}%',
+  '技能伤害': '柔韧的/强韧的/强烈的/超越的技能伤害 +{n}%',
+  '王伤': '给BOSS怪物造成的伤害 +{n}%',
+  '组队动速': 'BUFF-周围组队队员动作速度 +{n}%'
+};
+var COPY_ATTR_TEXT = '复制电路：复制与之相连的所有电路的一半效果';
+function fmtPct(v) { var n = Number(v); return n === 1 ? '1' : n.toFixed(1); }
+function attrText(attr, value) {
+  if (attr === '复制' || value === '复制') return COPY_ATTR_TEXT;
+  var t = ATTR_TEXT[attr];
+  return t ? t.replace(/\{n\}/g, fmtPct(value)) : attr + ' ' + fmtPct(value) + '%';
+}
 function valuesFor(attr) { return ATTR_VALUES[attr] || DEFAULT_VALUES; }
+function isCopyCell(c) { return !!c && c.value === '复制'; }
 
 function coerceValue(v, attr) {
   var list = valuesFor(attr), best = list[0], bd = Infinity;
@@ -561,7 +730,7 @@ function analyzePart(cells, equip) {
     for (var d2 = 1; d2 <= 2; d2++) {
       var b = nbIndex(order[a], d2);
       if (b < 0 || b === equip || !has(b)) continue;
-      if (cells[order[a]].copy && cells[b].copy) {
+      if (isCopyCell(cells[order[a]]) && isCopyCell(cells[b])) {
         cnt.copyAdj++;
         warnings.push({ kind: 'copyAdj', a: order[a], b: b });
       }
@@ -595,7 +764,7 @@ function computeStats(cells, equip) {
     if (!c || !TYPES[c.type]) continue;
     var t = an.tiles[i];
     if (!t || !t.valid) continue;
-    if (c.copy && c.type.charAt(0) === 'T') {
+    if (isCopyCell(c) && c.type.charAt(0) === 'T') {
       for (var q = 0; q < t.matched.length; q++) {
         var j = t.matched[q], jc = cells[j];
         if (!jc || !TYPES[jc.type]) continue;
@@ -1090,7 +1259,7 @@ var undoStack = [];   /* 注意：不能叫 history，浏览器里 history 是 w
 var booted = false;
 
 function freshState() {
-  var s = { color: 'red', parts: {}, brush: { type: 'I-1', attr: null, value: 1.0, owned: false, copy: false }, mode: 'select', tab: 'list', showAttr: true };
+  var s = { color: 'red', parts: {}, brush: { type: 'I-1', attr: null, value: 1.0, owned: false }, mode: 'select', tab: 'list', showAttr: false };
   PART_DEFS.forEach(function (d) { s.parts[d.id] = { cells: new Array(16).fill(null), equip: d.equip }; });
   return s;
 }
@@ -1119,16 +1288,17 @@ function load() {
       for (var i = 0; i < 16; i++) {
         var c = p.cells && p.cells[i];
         if (!c || !TYPES[c.type] || i === s.parts[d.id].equip) continue;
+        var isCopy = ((!!c.copy) || c.value === '复制') && c.type.charAt(0) === 'T';
+        var attr = isCopy ? '' : (d.attrs.indexOf(c.attr) >= 0 ? c.attr : d.attrs[0]);
         s.parts[d.id].cells[i] = {
           type: c.type,
-          attr: d.attrs.indexOf(c.attr) >= 0 ? c.attr : d.attrs[0],
-          value: coerceValue(Number(c.value) || 1.0, d.attrs.indexOf(c.attr) >= 0 ? c.attr : d.attrs[0]),
-          owned: !!c.owned,
-          copy: !!c.copy && c.type.charAt(0) === 'T'
+          attr: attr,
+          value: isCopy ? '复制' : coerceValue(Number(c.value) || 1.0, attr),
+          owned: !!c.owned
         };
       }
     });
-    if (o.brush && TYPES[o.brush.type]) s.brush = { type: o.brush.type, attr: null, value: Number(o.brush.value) || 1.0, owned: !!o.brush.owned, copy: !!o.brush.copy };
+    if (o.brush && TYPES[o.brush.type]) { var bCopy = (!!o.brush.copy && o.brush.type.charAt(0) === 'T') || o.brush.value === '复制'; s.brush = { type: o.brush.type, attr: null, value: bCopy ? '复制' : (Number(o.brush.value) || 1.0), owned: !!o.brush.owned }; }
     if (typeof o.showAttr === 'boolean') s.showAttr = o.showAttr;
     state = s;
     return true;
@@ -1155,13 +1325,14 @@ function ensureCell(partId, idx) {
   var c = state.parts[partId].cells[idx];
   if (c) return c;
   var def = PART_OF[partId];
-  var attr = (state.brush.attr && def.attrs.indexOf(state.brush.attr) >= 0) ? state.brush.attr : def.attrs[0];
+  var type = state.brush.type || 'I-1';
+  var isCopy = state.brush.value === '复制' && type.charAt(0) === 'T';
+  var attr = isCopy ? '' : ((state.brush.attr && def.attrs.indexOf(state.brush.attr) >= 0) ? state.brush.attr : def.attrs[0]);
   c = {
-    type: state.brush.type || 'I-1',
+    type: type,
     attr: attr,
-    value: coerceValue(state.brush.value, attr),
-    owned: !!state.brush.owned,
-    copy: !!state.brush.copy && (state.brush.type || 'I-1').charAt(0) === 'T'
+    value: isCopy ? '复制' : coerceValue(state.brush.value, attr),
+    owned: !!state.brush.owned
   };
   state.parts[partId].cells[idx] = c;
   return c;
@@ -1172,11 +1343,15 @@ function paintCell(partId, idx) {
   if (isEquip(partId, idx)) return;
   var def = PART_OF[partId], c = ensureCell(partId, idx);
   c.type = state.brush.type || c.type;
-  if (state.brush.attr && def.attrs.indexOf(state.brush.attr) >= 0) c.attr = state.brush.attr;
-  if (def.attrs.indexOf(c.attr) < 0) c.attr = def.attrs[0];
-  c.value = coerceValue(state.brush.value, c.attr);
+  var isCopy = state.brush.value === '复制' && c.type.charAt(0) === 'T';
+  if (isCopy) {
+    c.attr = ''; c.value = '复制';
+  } else {
+    if (state.brush.attr && def.attrs.indexOf(state.brush.attr) >= 0) c.attr = state.brush.attr;
+    if (!c.attr || def.attrs.indexOf(c.attr) < 0) c.attr = def.attrs[0];
+    c.value = coerceValue(state.brush.value, c.attr);
+  }
   c.owned = !!state.brush.owned;
-  c.copy = !!state.brush.copy && c.type.charAt(0) === 'T';
 }
 
 function forEachSelected(fn) {
@@ -1190,14 +1365,18 @@ function selectedList() { return Array.prototype.slice.call(selection); }
 
 function setType(t) {
   state.brush.type = t;
+  if (t.charAt(0) !== 'T' && state.brush.value === '复制') state.brush.value = 1.0;
   if (selection.size) {
     mutate(function () {
       forEachSelected(function (partId, idx) {
-        var c = ensureCell(partId, idx);
+        var c = ensureCell(partId, idx), def = PART_OF[partId];
         c.type = t;
-        if (state.brush.attr && PART_OF[partId].attrs.indexOf(state.brush.attr) >= 0) c.attr = state.brush.attr;
-        c.value = coerceValue(c.value, c.attr);
-        if (t.charAt(0) !== 'T') c.copy = false; else c.copy = !!state.brush.copy;
+        if (t.charAt(0) !== 'T' && isCopyCell(c)) {
+          c.attr = def.attrs[0]; c.value = coerceValue(1.0, c.attr);
+        } else if (!isCopyCell(c)) {
+          if (state.brush.attr && def.attrs.indexOf(state.brush.attr) >= 0) c.attr = state.brush.attr;
+          c.value = coerceValue(c.value, c.attr);
+        }
       });
     });
   } else render();
@@ -1205,47 +1384,52 @@ function setType(t) {
 function setAttr(a) {
   state.brush.attr = a;
   if (selection.size) {
-    var skipped = 0;
+    var skipped = 0, copies = 0;
     mutate(function () {
       forEachSelected(function (partId, idx) {
         if (PART_OF[partId].attrs.indexOf(a) < 0) { skipped++; return; }
         var c = ensureCell(partId, idx);
+        if (isCopyCell(c)) { copies++; return; }
         c.attr = a; c.value = coerceValue(c.value, a);
       });
     });
+    if (copies) toast(copies + ' 块复制电路没有属性，已跳过');
     if (skipped) toast('已跳过 ' + skipped + ' 块不支持「' + a + '」的电路');
   } else render();
 }
 function setValue(v) {
-  state.brush.value = v;
+  var copy = v === '复制';
+  if (copy) {
+    var canCopy = selection.size ? allSelectedAreT() : !!(state.brush.type && state.brush.type.charAt(0) === 'T');
+    if (!canCopy) { toast('只有 T 型电路可以选择复制'); return; }
+    if (state.brush.type && state.brush.type.charAt(0) === 'T') state.brush.value = '复制';
+  } else {
+    state.brush.value = Number(v) || 1.0;
+  }
   if (selection.size) {
-    var fixed = 0;
+    var fixed = 0, skipped = 0;
     mutate(function () {
       forEachSelected(function (partId, idx) {
-        var c = ensureCell(partId, idx);
-        var nv = coerceValue(v, c.attr);
-        if (nv !== v) fixed++;
-        c.value = nv;
+        var c = ensureCell(partId, idx), def = PART_OF[partId];
+        if (copy) {
+          if (c.type.charAt(0) !== 'T') { skipped++; return; }
+          c.attr = ''; c.value = '复制';
+        } else {
+          var a = (c.attr && def.attrs.indexOf(c.attr) >= 0) ? c.attr : def.attrs[0];
+          var nv = coerceValue(Number(v), a);
+          if (nv !== Number(v)) fixed++;
+          c.attr = a; c.value = nv;
+        }
       });
     });
-    if (fixed) toast('有 ' + fixed + ' 块电路不支持 ' + v.toFixed(1) + '，已取该属性最接近的档位');
+    if (skipped) toast(skipped + ' 块不是 T 型，已跳过复制');
+    if (fixed) toast('有 ' + fixed + ' 块电路不支持 ' + Number(v).toFixed(1) + '，已取该属性最接近的档位');
   } else render();
 }
 function setOwned(b) {
   state.brush.owned = b;
   if (selection.size) mutate(function () { forEachSelected(function (partId, idx) { ensureCell(partId, idx).owned = b; }); });
   else render();
-}
-function setCopy(b) {
-  state.brush.copy = b;
-  if (selection.size) {
-    mutate(function () {
-      forEachSelected(function (partId, idx) {
-        var c = ensureCell(partId, idx);
-        c.copy = b && c.type.charAt(0) === 'T';
-      });
-    });
-  } else render();
 }
 function rotateSelected() {
   state.brush.type = rotateType(state.brush.type, 1);
@@ -1270,6 +1454,187 @@ function selectAll() {
     for (var i = 0; i < 16; i++) if (!isEquip(d.id, i)) selection.add(key(d.id, i));
   });
   render();
+}
+
+/* ---------- 预设电路应用 ---------- */
+var PRESET_MODES = {
+  '15': { '15': 'id', '12': 'lr', '3': 'tb', '0': 'r180' },
+  '12': { '12': 'id', '15': 'lr', '3': 'r180', '0': 'tb' },
+  '3':  { '3': 'id', '0': 'lr', '15': 'tb', '12': 'r180' },
+  '0':  { '0': 'id', '3': 'lr', '12': 'tb', '15': 'r180' }
+};
+/* 预设整体旋转：位置与类型一起转，装备角跟着转 */
+var presetRot = 0;
+var PRESET_ROT90 = {
+  'I-1': 'I-2', 'I-2': 'I-1',
+  'L-1': 'L-2', 'L-2': 'L-3', 'L-3': 'L-4', 'L-4': 'L-1',
+  'T-1': 'T-2', 'T-2': 'T-3', 'T-3': 'T-4', 'T-4': 'T-1'
+};
+function rotatePresetMatrix(cells, steps) {
+  steps = ((Number(steps) || 0) % 4 + 4) % 4;
+  var out = cells.slice();
+  for (var s = 0; s < steps; s++) {
+    var next = new Array(16).fill(null);
+    for (var r = 0; r < 4; r++) for (var c = 0; c < 4; c++) {
+      var t = out[r * 4 + c];
+      if (!t) continue;
+      next[c * 4 + (3 - r)] = PRESET_ROT90[t] || t;
+    }
+    out = next;
+  }
+  return out;
+}
+var EQUIP_L = { '15': 'L-4', '12': 'L-1', '3': 'L-3', '0': 'L-2' };
+function rotateBoardWithEquip(cells, equip, steps) {
+  steps = ((Number(steps) || 0) % 4 + 4) % 4;
+  if (!steps) return cells.slice();
+  var board = cells.slice();
+  board[equip] = EQUIP_L[String(equip)];
+  var out = rotatePresetMatrix(board, steps);
+  out[equip] = null; // equipment stays at its fixed corner
+  return out;
+}
+function rotateFixedEquip(cells, equip, steps) {
+  steps = ((Number(steps) || 0) % 4 + 4) % 4;
+  if (!steps) return cells.slice();
+  var out = rotatePresetMatrix(cells, steps);
+  var eqRot = rotatePresetEquip(equip, steps);
+  var t = out[equip];
+  out[equip] = null;
+  out[eqRot] = t;
+  return out;
+}
+function rotatePresetEquip(idx, steps) {
+  steps = ((Number(steps) || 0) % 4 + 4) % 4;
+  var r = Math.floor(idx / 4), c = idx % 4;
+  for (var s = 0; s < steps; s++) { var nr = c, nc = 3 - r; r = nr; c = nc; }
+  return r * 4 + c;
+}
+var PRESET_MIRROR_LR = { 'I-1':'I-1','I-2':'I-2','L-1':'L-4','L-2':'L-3','L-3':'L-2','L-4':'L-1','T-1':'T-1','T-2':'T-4','T-3':'T-3','T-4':'T-2' };
+var PRESET_MIRROR_TB = { 'I-1':'I-1','I-2':'I-2','L-1':'L-2','L-2':'L-1','L-3':'L-4','L-4':'L-3','T-1':'T-3','T-2':'T-2','T-3':'T-1','T-4':'T-4' };
+var PRESET_ROT_180  = { 'I-1':'I-1','I-2':'I-2','L-1':'L-3','L-2':'L-4','L-3':'L-1','L-4':'L-2','T-1':'T-3','T-2':'T-4','T-3':'T-1','T-4':'T-2' };
+
+function transformPreset(cells, mode) {
+  if (mode === 'id') return cells.slice();
+  var map = mode === 'lr' ? PRESET_MIRROR_LR : (mode === 'tb' ? PRESET_MIRROR_TB : PRESET_ROT_180);
+  var out = new Array(16).fill(null);
+  for (var r = 0; r < 4; r++) {
+    for (var c = 0; c < 4; c++) {
+      var t = cells[r * 4 + c];
+      if (!t) continue;
+      var nr = (mode === 'tb' || mode === 'r180') ? 3 - r : r;
+      var nc = (mode === 'lr' || mode === 'r180') ? 3 - c : c;
+      out[nr * 4 + nc] = map[t] || t;
+    }
+  }
+  return out;
+}
+
+function applyPreset(key, target) {
+  var def = null;
+  for (var i = 0; i < PRESET_DEFS.length; i++) if (PRESET_DEFS[i].key === key) def = PRESET_DEFS[i];
+  if (!def) return;
+  var base = PRESET_BASES[def.base];
+  var pids = (def.scope === 'all' || target === 'all')
+    ? PART_DEFS.map(function (d) { return d.id; })
+    : [target];
+  mutate(function () {
+    pids.forEach(function (pid) {
+      var equip = PART_OF[pid].equip;
+      var mode = (PRESET_MODES[base.equip] && PRESET_MODES[base.equip][equip]) || 'id';
+      var shape0 = transformPreset(base.cells, mode);
+      var m = rotateBoardWithEquip(shape0, equip, presetRot);
+      var cells = state.parts[pid].cells;
+      for (var i = 0; i < 16; i++) {
+        if (i === equip) { cells[i] = null; continue; }
+        var t = m[i];
+        if (!t) { cells[i] = null; continue; }
+        var c = cells[i], pdef = PART_OF[pid];
+        if (c) {
+          c.type = t;
+          if (t.charAt(0) !== 'T' && isCopyCell(c)) {
+            c.attr = pdef.attrs[0];
+            c.value = coerceValue(1.0, c.attr);
+          }
+        }
+        else {
+          var attr = (state.brush.attr && pdef.attrs.indexOf(state.brush.attr) >= 0) ? state.brush.attr : pdef.attrs[0];
+          cells[i] = { type: t, attr: attr, value: 1.0, owned: true };
+        }
+      }
+    });
+    selection.clear();
+  });
+  var label = pids.length === PART_DEFS.length ? '全部四件套' : pids.map(function (pid) { return PART_OF[pid].label; }).join(' / ');
+  toast('已套用「' + def.name + '」到 ' + label);
+}
+
+function presetThumb(base) {
+  var s = '<svg viewBox="0 0 400 400" aria-hidden="true">';
+  s += '<rect width="400" height="400" rx="12" fill="#070b0a"/>';
+  for (var r = 0; r < 4; r++) for (var c = 0; c < 4; c++) {
+    s += '<rect x="' + (c * 100 + 4) + '" y="' + (r * 100 + 4) + '" width="92" height="92" rx="9" fill="rgba(255,255,255,.022)" stroke="rgba(255,255,255,.07)"/>';
+  }
+  for (var i = 0; i < 16; i++) {
+    var t = base.cells[i]; if (!t) continue;
+    var d = wiresPath(dirsOfType(t));
+    var rr = Math.floor(i / 4), cc = i % 4;
+    s += '<g transform="translate(' + (cc * 100) + ',' + (rr * 100) + ')">';
+    s += '<path d="' + d + '" fill="none" style="stroke:var(--c)" stroke-width="13" opacity=".55"/>';
+    s += '<path d="' + d + '" fill="none" stroke="#fff" stroke-width="5"/>';
+    s += '</g>';
+  }
+  var er = Math.floor(base.equip / 4), ec = base.equip % 4;
+  s += '<rect x="' + (ec * 100 + 34) + '" y="' + (er * 100 + 34) + '" width="32" height="32" rx="7" style="fill:rgba(57,217,138,.18);stroke:var(--ok)" stroke-width="1.5"/>';
+  s += '<circle cx="' + (ec * 100 + 50) + '" cy="' + (er * 100 + 50) + '" r="5" style="fill:var(--ok)"/>';
+  s += '</svg>';
+  return s;
+}
+
+var presetsBound = false;
+function renderPresetCards() {
+  var grid = $('#presetGrid');
+  grid.innerHTML = '';
+  var target = $('#presetPart').value || 'top';
+  var partId = target === 'all' ? 'top' : target;
+  var partEquip = PART_OF[partId].equip;
+  PRESET_DEFS.forEach(function (def) {
+    var base = PRESET_BASES[def.base];
+    var mode = (PRESET_MODES[base.equip] && PRESET_MODES[base.equip][partEquip]) || 'id';
+    var shape0 = transformPreset(base.cells, mode);
+    var shape = { cells: rotateBoardWithEquip(shape0, partEquip, presetRot), equip: partEquip };
+    var card = document.createElement('div');
+    card.className = 'pcard';
+    card.innerHTML =
+      '<div class="pthumb">' + presetThumb(shape) + '</div>' +
+      '<div class="pmeta"><div class="pname">' + def.name + '</div>' +
+      '<div class="pdesc">' + def.desc + '</div>' +
+      '<button class="btn primary" data-preset="' + def.key + '">套用到所选部位</button></div>';
+    grid.appendChild(card);
+  });
+  if (!presetsBound) {
+    grid.addEventListener('click', function (e) {
+      var b = e.target.closest ? e.target.closest('[data-preset]') : null;
+      if (!b) return;
+      applyPreset(b.dataset.preset, $('#presetPart').value);
+    });
+    presetsBound = true;
+  }
+}
+function updatePresetRotButtons() {
+  Array.prototype.forEach.call(document.querySelectorAll('#presetModal [data-rot]'), function (b) {
+    b.classList.toggle('active', Number(b.dataset.rot) === presetRot);
+  });
+}
+function openPresetModal() {
+  presetRot = 0;
+  updatePresetRotButtons();
+  var parts = {};
+  selection.forEach(function (k) { parts[k.split(':')[0]] = 1; });
+  var keys = Object.keys(parts);
+  if (keys.length === 1) $('#presetPart').value = keys[0];
+  renderPresetCards();
+  $('#presetModal').classList.add('show');
 }
 
 /* ---------- 构建 DOM ---------- */
@@ -1306,7 +1671,10 @@ function buildBoards() {
         cell.appendChild(sp); sparks.push(sp);
       }
       cell.appendChild(el('span', 'needtag', '缺'));
-      cell.appendChild(el('span', 'copytag', '复'));
+      var copyTag = el('span', 'copytag');
+      copyTag.title = '复制电路';
+      copyTag.setAttribute('aria-label', '复制电路');
+      cell.appendChild(copyTag);
       var lbl = el('div', 'lbl');
       var lblType = el('span', 'lt');
       var lblVal = el('span', 'lv');
@@ -1379,11 +1747,14 @@ function buildToolbar() {
     b.addEventListener('click', function () { setValue(v); });
     vb.appendChild(b);
   });
+  var copyBtn = el('button', 'chip', '复制');
+  copyBtn.id = 'btnValueCopy';
+  copyBtn.title = '复制电路（仅 T 型）：没有固定属性/数值，效果等于相邻电路属性的一半';
+  copyBtn.addEventListener('click', function () { setValue('复制'); });
+  vb.appendChild(copyBtn);
   /* 状态 */
   $('#btnOwned').addEventListener('click', function () { setOwned(true); toast('已标记为「已有」'); });
   $('#btnNeeded').addEventListener('click', function () { setOwned(false); toast('已标记为「未有」（会进入右侧清单）'); });
-  $('#btnCopy').addEventListener('click', function () { setCopy(true); toast('已勾选「复制」（仅 T 型电路有效）'); });
-  $('#btnNoCopy').addEventListener('click', function () { setCopy(false); });
   /* 操作 */
   $('#btnRotate').addEventListener('click', rotateSelected);
   $('#btnClearSel').addEventListener('click', clearSelected);
@@ -1396,6 +1767,17 @@ function buildToolbar() {
   });
   /* 顶栏 */
   $('#btnDemo').addEventListener('click', function () { loadDemo(); toast('已载入示例布局'); });
+  $('#btnPreset').addEventListener('click', openPresetModal);
+  $('#presetClose').addEventListener('click', function () { $('#presetModal').classList.remove('show'); });
+  $('#presetPart').addEventListener('change', function () { if ($('#presetModal').classList.contains('show')) renderPresetCards(); });
+  $('#presetModal').addEventListener('click', function (e) {
+    if (e.target === $('#presetModal')) { $('#presetModal').classList.remove('show'); return; }
+    var rb = e.target.closest ? e.target.closest('[data-rot]') : null;
+    if (!rb) return;
+    presetRot = Number(rb.dataset.rot) || 0;
+    updatePresetRotButtons();
+    renderPresetCards();
+  });
   $('#btnReset').addEventListener('click', function () {
     if (!confirm('确定清空全部 60 块电路？')) return;
     mutate(function () {
@@ -1466,7 +1848,7 @@ function setupMouse() {
     var picked = cellAt(h.part, h.idx);
     if (picked) {
       state.brush.type = picked.type; state.brush.attr = picked.attr; state.brush.value = picked.value;
-      state.brush.owned = picked.owned; state.brush.copy = picked.copy;
+      state.brush.owned = picked.owned;
     }
     render();
   });
@@ -1535,6 +1917,14 @@ function render() {
   document.documentElement.style.setProperty('--c', col.hex);
   document.documentElement.style.setProperty('--c-soft', col.soft);
   document.documentElement.style.setProperty('--c-rgb', col.rgb);
+  var pcb = PCB[state.color] || PCB.red;
+  document.documentElement.style.setProperty('--pcb-board', pcb.board);
+  document.documentElement.style.setProperty('--pcb-board2', pcb.board2);
+  document.documentElement.style.setProperty('--pcb-cell', pcb.cell);
+  document.documentElement.style.setProperty('--pcb-cell2', pcb.cell2);
+  document.documentElement.style.setProperty('--pcb-copy', pcb.copy);
+  document.documentElement.style.setProperty('--pcb-edge', pcb.edge);
+  document.documentElement.style.setProperty('--pcb-grid', pcb.grid);
 
   /* 顶栏 / 工具栏状态：有选中时反映"选中电路"的属性，没选中时反映画笔 */
   var hasSel = selection.size > 0;
@@ -1542,17 +1932,21 @@ function render() {
   var curAttr = hasSel ? commonOf('attr') : state.brush.attr;
   var curValue = hasSel ? commonOf('value') : state.brush.value;
   var curOwned = hasSel ? commonOf('owned') : state.brush.owned;
-  var curCopy = hasSel ? commonOf('copy') : state.brush.copy;
 
   Array.prototype.forEach.call($('#colorSeg').children, function (b) { b.classList.toggle('active', b.dataset.color === state.color); });
   Array.prototype.forEach.call($('#modeSeg').children, function (b) { b.classList.toggle('active', b.dataset.mode === state.mode); });
   Array.prototype.forEach.call($('#typeBtns').children, function (b) { b.classList.toggle('active', b.dataset.type === curType); });
   Array.prototype.forEach.call($('#attrBtns').children, function (b) { b.classList.toggle('active', b.dataset.attr === curAttr); });
-  Array.prototype.forEach.call($('#valueBtns').children, function (b) { b.classList.toggle('active', curValue != null && Number(b.dataset.value) === curValue); });
+  Array.prototype.forEach.call($('#valueBtns').children, function (b) {
+    if (b.id === 'btnValueCopy') {
+      b.disabled = !allSelectedAreT();
+      b.classList.toggle('active', curValue === '复制');
+    } else {
+      b.classList.toggle('active', typeof curValue === 'number' && Number(b.dataset.value) === curValue);
+    }
+  });
   $('#btnOwned').classList.toggle('active', curOwned === true);
   $('#btnNeeded').classList.toggle('active', curOwned === false);
-  $('#btnCopy').classList.toggle('active', curCopy === true);
-  $('#btnNoCopy').classList.toggle('active', curCopy === false);
   $('#btnShowAttr').classList.toggle('active', state.showAttr === true);
   $('#boards').classList.toggle('showattr', state.showAttr === true);
 
@@ -1574,7 +1968,7 @@ function render() {
       root.classList.toggle('on', !!(st && st.valid));
       root.classList.toggle('dim', !!c && !eq && !(st && st.valid));
       root.classList.toggle('need', !!c && !c.owned);
-      root.classList.toggle('copy', !!c && !!c.copy);
+      root.classList.toggle('copy', isCopyCell(c));
       root.classList.toggle('sel', selection.has(key(def.id, i)));
       var open = (st && st.open) || [];
       var sp = false;
@@ -1585,7 +1979,7 @@ function render() {
       }
       root.classList.toggle('sparked', sp);
       e.lt.textContent = (!eq && c) ? c.type : '';
-      e.lv.textContent = (!eq && c) ? (shortAttr(c.attr) + ' ' + c.value.toFixed(1)) : '';
+      e.lv.textContent = (!eq && c) ? (isCopyCell(c) ? '复制' : shortAttr(c.attr) + ' ' + c.value.toFixed(1)) : '';
     }
     /* 表头统计 */
     var head = root_board(def.id);
@@ -1628,6 +2022,18 @@ function commonOf(field) {
   });
   if (!n || mixed) return null;
   return v;
+}
+function allSelectedAreT() {
+  if (!selection.size) return !!(state.brush.type && state.brush.type.charAt(0) === 'T');
+  var all = true, n = 0;
+  selection.forEach(function (k) {
+    var p = k.split(':'), partId = p[0], idx = Number(p[1]);
+    if (isEquip(partId, idx)) return;
+    var c = state.parts[partId].cells[idx];
+    if (!c || c.type.charAt(0) !== 'T') all = false;
+    n++;
+  });
+  return n > 0 && all;
 }
 function focusKey() {
   if (selection.size !== 1) return null;
@@ -1672,21 +2078,23 @@ function renderInspector() {
       box.appendChild(el('div', 'ins-note', '单击任意电路，这里会显示它的完整名称、类型、属性、数值与通电状态，并可直接修改。'));
       return;
     }
-    var byType = {}, attrSum = {}, powered = 0, dim = 0;
+    var byType = {}, attrSum = {}, powered = 0, dim = 0, copyCount = 0;
     selection.forEach(function (kk) {
       var p = kk.split(':'), partId = p[0], idx = Number(p[1]);
       var c = state.parts[partId].cells[idx]; if (!c) return;
       byType[c.type] = (byType[c.type] || 0) + 1;
-      var ak = c.attr;
-      if (!attrSum[ak]) attrSum[ak] = 0;
-      attrSum[ak] += c.value;
+      if (isCopyCell(c)) { copyCount++; } else {
+        var ak = c.attr;
+        if (!attrSum[ak]) attrSum[ak] = 0;
+        attrSum[ak] += c.value;
+      }
       var st = lastAnalysis[partId] && lastAnalysis[partId].tiles[idx];
       if (st && st.valid) powered++; else dim++;
     });
     box.appendChild(el('div', 'ins-title', '已选 ' + selection.size + ' 块电路'));
     box.appendChild(el('div', 'ins-sub', '类型：' + Object.keys(byType).sort(function (a, b) { return TYPE_LIST.indexOf(a) - TYPE_LIST.indexOf(b); })
       .map(function (t) { return t + '×' + byType[t]; }).join('  ')));
-    box.appendChild(el('div', 'ins-sub', '属性：' + Object.keys(attrSum).map(function (a) { return a + ' ' + attrSum[a].toFixed(1); }).join(' · ')));
+    box.appendChild(el('div', 'ins-sub', '属性：' + (Object.keys(attrSum).map(function (a) { return a + ' ' + attrSum[a].toFixed(1); }).join(' · ') || '—') + (copyCount ? ' · 复制 ' + copyCount + ' 块' : '')));
     box.appendChild(el('div', 'ins-sub ' + (dim ? 'bad' : 'ok'), '通电 ' + powered + ' 块' + (dim ? ' · 未通电 ' + dim + ' 块' : '')));
     box.appendChild(el('div', 'ins-note', '上方工具栏的按钮会批量修改全部选中电路。只想改一块时，单击那一块即可。'));
     return;
@@ -1701,30 +2109,26 @@ function renderInspector() {
   }
   var stx = statusText(partId, idx);
   box.appendChild(el('div', 'ins-title', fullName(c.type, def.label, colorName)));
-  box.appendChild(el('div', 'ins-sub', def.label + ' · ' + rcText(idx)));
+  box.appendChild(el('div', 'ins-sub', def.label + ' · ' + rcText(idx) + ' · ' + (c.owned ? '已有' : '未有')));
   box.appendChild(el('div', 'ins-sub ' + (stx.ok ? 'ok' : 'bad'), stx.text));
 
+  var copy = isCopyCell(c);
   var row1 = el('div', 'ins-row');
   row1.appendChild(el('span', 'ins-k', '类型'));
   row1.appendChild(mkSel(TYPE_LIST.map(function (t) { return { v: t, t: t }; }), c.type, function (v) { setType(v); }));
   row1.appendChild(el('span', 'ins-k', '属性'));
-  row1.appendChild(mkSel(def.attrs.map(function (a) { return { v: a, t: a }; }), c.attr, function (v) { setAttr(v); }));
+  var attrOpts = copy ? [{ v: '', t: '—' }] : def.attrs.map(function (a) { return { v: a, t: a }; });
+  var attrSel = mkSel(attrOpts, c.attr, function (v) { setAttr(v); });
+  if (copy) attrSel.disabled = true;
+  row1.appendChild(attrSel);
   row1.appendChild(el('span', 'ins-k', '数值'));
-  row1.appendChild(mkSel(valuesFor(c.attr).map(function (x) { return { v: x, t: x.toFixed(1) }; }), c.value, function (v) { setValue(Number(v)); }));
+  var valOpts = valuesFor(copy ? '' : c.attr).map(function (x) { return { v: x, t: x.toFixed(1) }; });
+  if (c.type.charAt(0) === 'T') valOpts.push({ v: '复制', t: '复制' });
+  row1.appendChild(mkSel(valOpts, c.value, function (v) { setValue(v === '复制' ? '复制' : Number(v)); }));
   box.appendChild(row1);
+  if (copy) box.appendChild(el('div', 'ins-note', '复制电路没有固定属性/数值，效果等于相邻电路属性的一半。'));
 
   var row2 = el('div', 'ins-row');
-  var b1 = el('button', 'chip' + (c.owned ? ' active' : ''), '已有');
-  b1.addEventListener('click', function () { setOwned(true); });
-  var b2 = el('button', 'chip warn' + (!c.owned ? ' active' : ''), '未有');
-  b2.addEventListener('click', function () { setOwned(false); });
-  row2.appendChild(b1); row2.appendChild(b2);
-  if (c.type.charAt(0) === 'T') {
-    var b3 = el('button', 'chip' + (c.copy ? ' active' : ''), c.copy ? '复制：开' : '复制：关');
-    b3.title = '复制电路：效果等于所连相邻电路属性的一半';
-    b3.addEventListener('click', function () { setCopy(!c.copy); });
-    row2.appendChild(b3);
-  }
   var b4 = el('button', 'btn', '旋转 ↻');
   b4.addEventListener('click', rotateSelected);
   var b5 = el('button', 'btn', '清除');
@@ -1750,8 +2154,9 @@ function showTip(cellEl, ev) {
     tip.appendChild(el('div', 't-sub', '当前画笔：' + brushText()));
   } else {
     tip.appendChild(el('div', 't-name', fullName(c.type, def.label, colorName)));
-    tip.appendChild(el('div', 't-sub', def.label + ' ' + rcText(idx) + ' · ' + c.attr + ' ' + c.value.toFixed(1) +
-      ' · ' + (c.owned ? '已有' : '未有') + (c.copy ? ' · 复制' : '')));
+    tip.appendChild(el('div', 't-sub', def.label + ' ' + rcText(idx) + ' · ' +
+      (isCopyCell(c) ? '复制' : c.attr + ' ' + c.value.toFixed(1)) +
+      ' · ' + (c.owned ? '已有' : '未有')));
     var s = statusText(partId, idx);
     tip.appendChild(el('div', 't-sub ' + (s.ok ? 'ok' : 'bad'), s.text));
   }
@@ -1775,7 +2180,8 @@ function hideTip() {
 function root_board(partId) { return document.querySelector('.board[data-part="' + partId + '"]'); }
 function brushText() {
   var b = state.brush;
-  return (b.type || '未选') + (b.attr ? ' · ' + b.attr : '') + ' · ' + b.value.toFixed(1) + ' · ' + (b.owned ? '已有' : '未有') + (b.copy ? ' · 复制' : '');
+  var isCopy = b.value === '复制';
+  return (b.type || '未选') + (!isCopy && b.attr ? ' · ' + b.attr : '') + ' · ' + (isCopy ? '复制' : b.value.toFixed(1)) + ' · ' + (b.owned ? '已有' : '未有');
 }
 
 function renderSummary() {
@@ -1818,9 +2224,9 @@ function renderList(body) {
         var c = cells[i];
         if (!c || i === state.parts[def.id].equip) continue;
         if (c.owned) continue;
-        if (c.attr !== attr) continue;
-        var k = c.type + '|' + c.value.toFixed(1) + '|' + (c.copy ? 1 : 0);
-        if (!items[k]) items[k] = { type: c.type, value: c.value, copy: !!c.copy, count: 0, idxs: [], powered: true };
+        if (isCopyCell(c) || c.attr !== attr) continue;
+        var k = c.type + '|' + c.value.toFixed(1);
+        if (!items[k]) items[k] = { type: c.type, value: c.value, copy: false, count: 0, idxs: [], powered: true };
         items[k].count++; items[k].idxs.push(i);
         var st = lastAnalysis[def.id].tiles[i];
         if (!st || !st.valid) items[k].powered = false;
@@ -1835,6 +2241,24 @@ function renderList(body) {
       total += cnt;
       groups.push({ def: def, attr: attr, items: arr, count: cnt });
     });
+    /* 复制电路单独一组（复制是数值，不是属性） */
+    var copyItems = {};
+    for (var ci = 0; ci < 16; ci++) {
+      var cc = cells[ci];
+      if (!cc || ci === state.parts[def.id].equip || cc.owned || !isCopyCell(cc)) continue;
+      var ck = cc.type + '|复制';
+      if (!copyItems[ck]) copyItems[ck] = { type: cc.type, value: '复制', copy: true, count: 0, idxs: [], powered: true };
+      copyItems[ck].count++; copyItems[ck].idxs.push(ci);
+      var cst = lastAnalysis[def.id].tiles[ci];
+      if (!cst || !cst.valid) copyItems[ck].powered = false;
+    }
+    var carr = Object.keys(copyItems).map(function (k) { return copyItems[k]; });
+    if (carr.length) {
+      carr.sort(function (a, b) { return TYPE_LIST.indexOf(a.type) - TYPE_LIST.indexOf(b.type); });
+      var ccnt = carr.reduce(function (s, x) { return s + x.count; }, 0);
+      total += ccnt;
+      groups.push({ def: def, attr: '复制', items: carr, count: ccnt });
+    }
   });
 
   if (!groups.length) {
@@ -1852,15 +2276,35 @@ function renderList(body) {
       var main = el('div', 'imain');
       main.appendChild(el('div', 'iname', fullName(it.type, g.def.label, colorName)));
       var sub = el('div', 'isub');
-      sub.appendChild(document.createTextNode(g.attr + ' ' + it.value.toFixed(1)));
-      if (it.copy) { var t = el('span', 'tag', ' · 复制'); sub.appendChild(t); }
+      sub.appendChild(document.createTextNode(attrText(g.attr, it.value)));
       if (!it.powered) { var bd = el('span', 'bad', ' · 未通电'); sub.appendChild(bd); }
       main.appendChild(sub);
       row.appendChild(main);
       row.appendChild(el('span', 'icount', '×' + it.count));
+      var copyName = fullName(it.type, g.def.label, colorName) + (it.copy ? '（复制）' : '');
+      var copyAttr = attrText(g.attr, it.value);
+      var nameBtn = el('button', 'icopy', '复制名称');
+      nameBtn.type = 'button';
+      nameBtn.title = '复制电路名字';
+      nameBtn.setAttribute('aria-label', '复制名称');
+      nameBtn.addEventListener('click', function (e) {
+        e.stopPropagation();
+        copyPlain(copyName, '已复制名称');
+      });
+      var attrBtn = el('button', 'icopy', '复制属性');
+      attrBtn.type = 'button';
+      attrBtn.title = '复制属性描述';
+      attrBtn.setAttribute('aria-label', '复制属性');
+      attrBtn.addEventListener('click', function (e) {
+        e.stopPropagation();
+        copyPlain(copyAttr, '已复制属性');
+      });
+      row.appendChild(nameBtn);
+      row.appendChild(attrBtn);
       row.addEventListener('click', function () { flashPart(g.def.id, it.idxs); });
-      body.appendChild(row);
+      box.appendChild(row);
     });
+    body.appendChild(box);
   });
   var note = el('div', 'hint');
   note.style.paddingTop = '6px';
@@ -1989,9 +2433,9 @@ function listText() {
       var items = {};
       for (var i = 0; i < 16; i++) {
         var c = state.parts[def.id].cells[i];
-        if (!c || i === state.parts[def.id].equip || c.owned || c.attr !== attr) continue;
-        var k = c.type + '|' + c.value.toFixed(1) + '|' + (c.copy ? 1 : 0);
-        if (!items[k]) items[k] = { type: c.type, value: c.value, copy: !!c.copy, count: 0 };
+        if (!c || i === state.parts[def.id].equip || c.owned || isCopyCell(c) || c.attr !== attr) continue;
+        var k = c.type + '|' + c.value.toFixed(1);
+        if (!items[k]) items[k] = { type: c.type, value: c.value, copy: false, count: 0 };
         items[k].count++;
       }
       var arr = Object.keys(items).map(function (k) { return items[k]; });
@@ -2001,9 +2445,27 @@ function listText() {
       lines.push('— ' + def.label + ' · ' + attr + ' —');
       arr.forEach(function (it) {
         total += it.count;
-        lines.push(fullName(it.type, def.label, colorName) + (it.copy ? '（复制）' : '') + '  ×' + it.count + '   ' + attr + ' ' + it.value.toFixed(1));
+        lines.push(fullName(it.type, def.label, colorName) + '  ×' + it.count + '   ' + attrText(attr, it.value));
       });
     });
+    var copyItems = {};
+    for (var ci = 0; ci < 16; ci++) {
+      var cc = state.parts[def.id].cells[ci];
+      if (!cc || ci === state.parts[def.id].equip || cc.owned || !isCopyCell(cc)) continue;
+      var ck = cc.type + '|复制';
+      if (!copyItems[ck]) copyItems[ck] = { type: cc.type, count: 0 };
+      copyItems[ck].count++;
+    }
+    var carr = Object.keys(copyItems).map(function (k) { return copyItems[k]; });
+    if (carr.length) {
+      carr.sort(function (a, b) { return TYPE_LIST.indexOf(a.type) - TYPE_LIST.indexOf(b.type); });
+      lines.push('');
+      lines.push('— ' + def.label + ' · 复制 —');
+      carr.forEach(function (it) {
+        total += it.count;
+        lines.push(fullName(it.type, def.label, colorName) + '（复制）  ×' + it.count + '   ' + COPY_ATTR_TEXT);
+      });
+    }
   });
   lines.push('');
   lines.push('合计 ' + total + ' 块电路未有');
@@ -2015,12 +2477,17 @@ function copyListText() {
     navigator.clipboard.writeText(txt).then(function () { toast('清单已复制到剪贴板'); }, function () { fallbackCopy(txt); });
   } else fallbackCopy(txt);
 }
-function fallbackCopy(txt) {
+function copyPlain(txt, okMsg) {
+  if (navigator.clipboard && navigator.clipboard.writeText) {
+    navigator.clipboard.writeText(txt).then(function () { toast(okMsg || ('已复制：' + txt)); }, function () { fallbackCopy(txt, okMsg); });
+  } else fallbackCopy(txt, okMsg);
+}
+function fallbackCopy(txt, okMsg) {
   var ta = document.createElement('textarea');
   ta.value = txt;
   ta.style.position = 'fixed'; ta.style.left = '-9999px';
   document.body.appendChild(ta); ta.select();
-  try { document.execCommand('copy'); toast('清单已复制到剪贴板'); } catch (e) { window.prompt('复制下面的清单：', txt); }
+  try { document.execCommand('copy'); toast(okMsg || '清单已复制到剪贴板'); } catch (e) { window.prompt('复制下面的内容：', txt); }
   ta.remove();
 }
 
@@ -2049,7 +2516,8 @@ function loadDemo() {
       var attr = def.attrs[(i + pi) % def.attrs.length];
       var list = valuesFor(attr);
       var value = list[(i * 3 + pi) % list.length];
-      st.parts[def.id].cells[i] = { type: type, attr: attr, value: value, owned: ((i + pi) % 3) !== 0, copy: copy && type.charAt(0) === 'T' };
+      if (copy && type.charAt(0) === 'T') { attr = ''; value = '复制'; }
+      st.parts[def.id].cells[i] = { type: type, attr: attr, value: value, owned: ((i + pi) % 3) !== 0 };
     }
   });
   state.parts = st.parts;
@@ -2094,7 +2562,10 @@ function impCellsFor(partId) {
   for (var i = 0; i < 16; i++) {
     if (i === pageEquip || i === recEquip) continue;
     var t = impTypeOf(partId, i);
-    if (t) cells[i] = { type: t, attr: def.attrs[0], value: 1.0, owned: true, copy: impIsCopy(partId, i) };
+    if (t) {
+      var isCopy = impIsCopy(partId, i) && t.charAt(0) === 'T';
+      cells[i] = { type: t, attr: isCopy ? '' : def.attrs[0], value: isCopy ? '复制' : 1.0, owned: true };
+    }
   }
   return cells;
 }
@@ -2409,10 +2880,17 @@ function impApply() {
         if (!t) { if (c) { cells[i] = null; stat.del++; } continue; }
         var isCopy = wantCopy && t.charAt(0) === 'T' && impIsCopy(def.id, i);   /* 复制只对 T 型有效 */
         if (isCopy) stat.copy++;
-        if (c) { c.type = t; if (wantCopy) c.copy = isCopy; stat.keep++; }   /* 属性/数值/已有状态沿用 */
+        if (c) {
+          c.type = t;
+          if (wantCopy) {
+            if (isCopy) { c.attr = ''; c.value = '复制'; }
+            else if (isCopyCell(c)) { c.attr = def.attrs[0]; c.value = coerceValue(1.0, c.attr); }
+          }
+          stat.keep++;
+        }
         else {
           var attr = def.attrs[0];
-          cells[i] = { type: t, attr: attr, value: coerceValue(1.0, attr), owned: newOwned, copy: isCopy };
+          cells[i] = { type: t, attr: isCopy ? '' : attr, value: isCopy ? '复制' : coerceValue(1.0, attr), owned: newOwned };
           stat.add++;
         }
       }
