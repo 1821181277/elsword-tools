@@ -303,11 +303,18 @@ details[open] summary::after{content:"–"}
   <!-- ============ 图 ============ -->
   <div class="card">
     <h2>概率分布图 <span class="tag">青柱 = 该分数区间的概率（左轴）；金线 = P(总分 ≥ x)（右轴）</span></h2>
-    <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin:-2px 0 8px">
-      <button id="btnChartReset" class="mini">重置缩放</button>
-      <span class="muted">滚轮缩放横向 · Shift+滚轮缩放纵向 · 拖动平移 · 双击复位</span>
+    <div style="display:flex;gap:7px;align-items:center;flex-wrap:wrap;margin:-2px 0 6px">
+      <span class="muted">横向</span>
+      <button id="btnZoomXOut" class="mini" title="横向缩小">−</button>
+      <button id="btnZoomXIn" class="mini" title="横向放大">＋</button>
+      <span class="muted" style="margin-left:6px">纵向</span>
+      <button id="btnZoomYOut" class="mini" title="纵向缩小">−</button>
+      <button id="btnZoomYIn" class="mini" title="纵向放大">＋</button>
+      <button id="btnZoomYFit" class="mini" title="把当前窗口里最高的柱子顶到顶">自适应纵轴</button>
+      <button id="btnChartReset" class="mini" style="margin-left:6px">重置</button>
       <span class="pill" id="chartZoom">全范围</span>
     </div>
+    <div class="muted" style="margin:-2px 0 8px">滚轮 = 横向缩放 · Shift+滚轮 = 纵向缩放 · 拖动平移 · 双击复位</div>
     <div class="chartwrap">
       <svg id="chart" viewBox="0 0 1000 440" preserveAspectRatio="xMidYMid meet"></svg>
       <div id="tip"></div>
@@ -1039,7 +1046,36 @@ if (typeof globalThis !== "undefined") globalThis.CORE = CORE;
     VIEW = { x0: null, x1: null, y: 1 };
     if (LAST) renderChart(LAST.st, LAST.m);
   }
+  function zoomXAt(t, factor) {
+    if (!LAST) return;
+    const w = VIEW.x1 - VIEW.x0;
+    const anchor = VIEW.x0 + t * w;
+    const nw = w * factor;
+    clampView(anchor - t * nw, anchor - t * nw + nw);
+    renderChart(LAST.st, LAST.m);
+  }
+  function zoomY(factor) {
+    if (!LAST) return;
+    VIEW.y = Math.min(500, Math.max(1, VIEW.y * factor));
+    renderChart(LAST.st, LAST.m);
+  }
+  /** 让当前窗口里最高的柱子顶到画布顶部（缩进尾巴时特别有用） */
+  function fitY() {
+    if (!LAST) return;
+    const bins = CORE.histogram(dist, S.bin);
+    const maxAll = Math.max(...bins.map((b) => b.p)) || 1;
+    let maxWin = 0;
+    for (const b of bins) if (b.hi > VIEW.x0 && b.lo < VIEW.x1) maxWin = Math.max(maxWin, b.p);
+    if (!(maxWin > 0)) return;
+    VIEW.y = Math.min(500, Math.max(1, maxAll / maxWin));
+    renderChart(LAST.st, LAST.m);
+  }
   $("btnChartReset").addEventListener("click", resetZoom);
+  $("btnZoomXIn").addEventListener("click", () => zoomXAt(0.5, 1 / 1.4));
+  $("btnZoomXOut").addEventListener("click", () => zoomXAt(0.5, 1.4));
+  $("btnZoomYIn").addEventListener("click", () => zoomY(1.3));
+  $("btnZoomYOut").addEventListener("click", () => zoomY(1 / 1.3));
+  $("btnZoomYFit").addEventListener("click", fitY);
 
   $("chart").addEventListener("wheel", (e) => {
     if (!LAST) return;
