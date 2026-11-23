@@ -124,7 +124,8 @@ tbody tr:hover td{background:rgba(255,255,255,.018)}
 .cell input{width:64px;text-align:center;padding:4px;font-size:12px}
 
 /* ---------- chart ---------- */
-#chart{width:100%;height:auto;display:block}
+#chart{width:100%;height:auto;display:block;cursor:grab;user-select:none;touch-action:pan-y}
+#chart:active{cursor:grabbing}
 .chartwrap{position:relative}
 #chart line,#chart text,#chart polyline{pointer-events:none}
 #chart g:hover rect.bar{fill:#8ef0ff}
@@ -302,6 +303,11 @@ details[open] summary::after{content:"–"}
   <!-- ============ 图 ============ -->
   <div class="card">
     <h2>概率分布图 <span class="tag">青柱 = 该分数区间的概率（左轴）；金线 = P(总分 ≥ x)（右轴）</span></h2>
+    <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin:-2px 0 8px">
+      <button id="btnChartReset" class="mini">重置缩放</button>
+      <span class="muted">滚轮缩放横向 · Shift+滚轮缩放纵向 · 拖动平移 · 双击复位</span>
+      <span class="pill" id="chartZoom">全范围</span>
+    </div>
     <div class="chartwrap">
       <svg id="chart" viewBox="0 0 1000 440" preserveAspectRatio="xMidYMid meet"></svg>
       <div id="tip"></div>
@@ -897,68 +903,97 @@ if (typeof globalThis !== "undefined") globalThis.CORE = CORE;
   }
 
   // ---------------- 图 ----------------
+  let VIEW = { x0: null, x1: null, y: 1 };   // 缩放窗口；null = 全范围
+  let LAST = null;                            // 最近一次 { st, m }，缩放时复用，不必重算分布
+
   function renderChart(st, m) {
+    LAST = { st, m };
     const W = 1000, H = 440, L = 66, R = 66, T = 22, B = 52;
     const pw = W - L - R, ph = H - T - B;
     const bins = CORE.histogram(dist, S.bin);
     // 退化分布（所有分数相同）时给个伪跨度，否则 (hi-lo)=0 会把所有点压到左边界
     const pad = Math.max(0.5, S.bin);
-    const dlo = st.hi > st.lo ? st.lo : st.lo - pad;
-    const dhi = st.hi > st.lo ? st.hi : st.hi + pad;
+    const flat = st.hi <= st.lo;
+    const fullLo = flat ? st.lo - pad : st.lo;
+    const fullHi = flat ? st.hi + pad : st.hi;
+
+    // 当前窗口（越界自动收回）
+    let dlo = flat ? fullLo : (VIEW.x0 === null ? fullLo : VIEW.x0);
+    let dhi = flat ? fullHi : (VIEW.x1 === null ? fullHi : VIEW.x1);
+    dlo = Math.max(fullLo, Math.min(dlo, fullHi));
+    dhi = Math.min(fullHi, Math.max(dhi, fullLo));
+    if (!(dhi > dlo)) { dlo = fullLo; dhi = fullHi; }
+    VIEW.x0 = dlo; VIEW.x1 = dhi;
+
     const x = (v) => L + ((v - dlo) / (dhi - dlo)) * pw;
     const maxP = Math.max(...bins.map((b) => b.p)) || 1;
-    const yP = (p) => T + ph - (p / maxP) * ph;
+    const yTop = Math.max(maxP / Math.max(1, VIEW.y), 1e-15);   // 纵向放大时 yTop 变小，高柱会被裁掉
+    const yP = (p) => T + ph - (p / yTop) * ph;
     const yC = (p) => T + ph - p * ph;
-    const bw = bins.length === 1 ? pw * 0.18 : Math.max(1, (pw / bins.length) * 0.82);
 
-    let s = "";
-    // 横网格 + 左轴(%) + 右轴(累计%)
+    let s = `<defs><clipPath id="plotClip"><rect x="${L}" y="${T}" width="${pw}" height="${ph}"/></clipPath></defs>`;
+    // 横向网格 + 左轴(%) + 右轴(累计%)
     for (let i = 0; i <= 5; i++) {
       const f = i / 5, y = T + ph - f * ph;
       s += `<line x1="${L}" y1="${y.toFixed(1)}" x2="${L + pw}" y2="${y.toFixed(1)}" stroke="rgba(255,255,255,.055)"/>`;
-      const lab = maxP * f * 100;
-      s += `<text x="${L - 8}" y="${(y + 4).toFixed(1)}" font-size="11" text-anchor="end" fill="#7d879b">${(lab >= 10 ? lab.toFixed(1) : lab.toFixed(2))}%</text>`;
+      const lab = yTop * f * 100;
+      s += `<text x="${L - 8}" y="${(y + 4).toFixed(1)}" font-size="11" text-anchor="end" fill="#7d879b">${(lab >= 10 ? lab.toFixed(1) : lab >= 1 ? lab.toFixed(2) : lab.toFixed(3))}%</text>`;
       s += `<text x="${L + pw + 8}" y="${(y + 4).toFixed(1)}" font-size="11" fill="#f0c46a">${(f * 100).toFixed(0)}%</text>`;
     }
-    // 柱
-    bins.forEach((b, i) => {
-      const x0 = x(b.lo), x1 = x(b.hi);
+    // 柱子 + 整列命中区（只画窗口内的）
+    s += `<g clip-path="url(#plotClip)">`;
+    bins.forEach((b) => {
+      if (b.hi <= dlo || b.lo >= dhi) return;
+      const lx = Math.max(b.lo, dlo), rx = Math.min(b.hi, dhi);
+      const x0 = x(lx), x1 = x(rx);
       const cx = (x0 + x1) / 2;
-      const wBar = Math.max(1, Math.min(bw, x1 - x0 || bw));   // 最后一箱被截短时按实际宽度画
+      const wBar = Math.max(1, Math.min(64, (x1 - x0) * 0.82 || 1));
       const y = yP(b.p), h = T + ph - y;
-      const slot = pw / bins.length;                         // 整列命中区：柱子很矮甚至为 0 也能 hover
-      const hx = Math.max(L, cx - slot / 2), hw = Math.max(1, Math.min(L + pw, cx + slot / 2) - hx);
+      const hx = Math.max(L, x(b.lo)), hw = Math.max(1, Math.min(L + pw, x(b.hi)) - hx);
       s += `<g data-rng="${sc(b.lo)} ~ ${sc(b.hi)}" data-lo="${sc(b.lo)}" data-p="${pct(b.p)}" data-cum="${pct(b.cum)}">`
          + `<rect class="bar" x="${(cx - wBar / 2).toFixed(1)}" y="${y.toFixed(1)}" width="${wBar.toFixed(1)}" height="${Math.max(0, h).toFixed(1)}" fill="rgba(70,213,239,.55)" stroke="rgba(70,213,239,.85)" stroke-width="0.6"/>`
          + `<rect class="hit" x="${hx.toFixed(1)}" y="${T}" width="${hw.toFixed(1)}" height="${ph}" fill="transparent" pointer-events="all"/>`
          + `</g>`;
     });
-    // 累计曲线
-    const pts = bins.map((b) => `${x(b.lo).toFixed(1)},${yC(b.cum).toFixed(1)}`).join(" ");
-    s += `<polyline points="${pts}" fill="none" stroke="#f0c46a" stroke-width="2"/>`;
+    // 累计曲线（含窗口两端的真实值，避免缩到一根柱子里时线消失）
+    if (!flat) {
+      const pts = [`${x(dlo).toFixed(1)},${yC(CORE.geq(dist, dlo)).toFixed(1)}`];
+      for (const b of bins) if (b.lo > dlo && b.lo < dhi) pts.push(`${x(b.lo).toFixed(1)},${yC(b.cum).toFixed(1)}`);
+      pts.push(`${x(dhi).toFixed(1)},${yC(CORE.geq(dist, dhi)).toFixed(1)}`);
+      s += `<polyline points="${pts.join(" ")}" fill="none" stroke="#f0c46a" stroke-width="2"/>`;
+    }
     // 档位线
     for (const [v, c] of [[19, "#8d97a9"], [22, "#3ddc97"], [25, "#a78bfa"], [30, "#ff9d9d"]]) {
-      if (v < st.lo || v > st.hi) continue;
+      if (v < dlo || v > dhi) continue;
       s += `<line x1="${x(v).toFixed(1)}" y1="${T}" x2="${x(v).toFixed(1)}" y2="${T + ph}" stroke="${c}" stroke-dasharray="3 4" opacity="0.55"/>`;
       s += `<text x="${x(v).toFixed(1)}" y="${T - 6}" font-size="10.5" text-anchor="middle" fill="${c}">${v}</text>`;
     }
     // 目标 M
-    if (m >= st.lo && m <= st.hi) {
+    if (!flat && m >= dlo && m <= dhi) {
       s += `<line x1="${x(m).toFixed(1)}" y1="${T}" x2="${x(m).toFixed(1)}" y2="${T + ph}" stroke="#e9edf6" stroke-width="1.4" stroke-dasharray="6 4" opacity=".8"/>`;
       s += `<text x="${x(m).toFixed(1)}" y="${T + ph + 16}" font-size="11" text-anchor="middle" fill="#e9edf6">目标 ${sc(m)} 分</text>`;
     }
-    // 坐标轴
+    s += `</g>`;
+    // 坐标轴 + 刻度（步长随窗口自适应）
     s += `<line x1="${L}" y1="${T + ph}" x2="${L + pw}" y2="${T + ph}" stroke="rgba(255,255,255,.22)"/>`;
-    const step = (st.hi - st.lo) > 24 ? 4 : (st.hi - st.lo) > 10 ? 2 : 1;
-    for (let v = Math.ceil(st.lo); v <= st.hi; v += step) {
+    const span = dhi - dlo;
+    const step = span > 24 ? 4 : span > 10 ? 2 : span > 4 ? 1 : span > 1.6 ? 0.5 : span > 0.6 ? 0.25 : 0.1;
+    const start = Math.ceil(dlo / step - 1e-9) * step;
+    for (let i = 0; i < 200; i++) {
+      const v = start + i * step;
+      if (v > dhi + 1e-9) break;
       s += `<line x1="${x(v).toFixed(1)}" y1="${T + ph}" x2="${x(v).toFixed(1)}" y2="${T + ph + 5}" stroke="rgba(255,255,255,.22)"/>`;
-      s += `<text x="${x(v).toFixed(1)}" y="${T + ph + 20}" font-size="11" text-anchor="middle" fill="#9aa5b8">${v}</text>`;
+      s += `<text x="${x(v).toFixed(1)}" y="${T + ph + 20}" font-size="11" text-anchor="middle" fill="#9aa5b8">${sc(v)}</text>`;
     }
     s += `<text x="${L + pw / 2}" y="${H - 12}" font-size="12.5" text-anchor="middle" fill="#9aa5b8">4 条词条得分总和</text>`;
-    s += `<text x="${L + 6}" y="${T + 12}" font-size="11" fill="#46d5ef">青柱 = 该分数区间的概率（左轴）</text>`;
-    s += `<text x="${L + 6}" y="${T + 27}" font-size="11" fill="#f0c46a">金线 = P(总分 ≥ x)（右轴）</text>`;
+    // 图例放在卡片标题的 tag 里，不压在柱子上（放大后柱子会顶到顶）
     $("chart").innerHTML = s;
     hideTip();
+
+    const zoomed = Math.abs(dlo - fullLo) > 1e-9 || Math.abs(dhi - fullHi) > 1e-9 || VIEW.y !== 1;
+    $("chartZoom").innerHTML = zoomed
+      ? `${sc(dlo)} ~ ${sc(dhi)} 分` + (VIEW.y !== 1 ? ` · 纵轴 ×${VIEW.y < 10 ? VIEW.y.toFixed(1) : Math.round(VIEW.y)}` : "")
+      : "全范围";
   }
 
   // ---------------- 悬停浮层 ----------------
@@ -984,6 +1019,73 @@ if (typeof globalThis !== "undefined") globalThis.CORE = CORE;
     if (g) showTip(g, e); else hideTip();
   });
   $("chart").addEventListener("mouseleave", hideTip);
+
+  // ---------------- 图表缩放 ----------------
+  const CH = { W: 1000, H: 440, L: 66, R: 66, T: 22, B: 52 };
+  const plot = { pw: CH.W - CH.L - CH.R, ph: CH.H - CH.T - CH.B };
+
+  function viewBounds() {
+    const st = LAST.st, pad = Math.max(0.5, S.bin);
+    return st.hi > st.lo ? { lo: st.lo, hi: st.hi, flat: false } : { lo: st.lo - pad, hi: st.hi + pad, flat: true };
+  }
+  function clampView(a, b) {
+    const B = viewBounds();
+    let w = Math.min(B.hi - B.lo, Math.max((B.hi - B.lo) / 400, b - a));
+    if (a < B.lo) a = B.lo;
+    if (a + w > B.hi) a = B.hi - w;
+    VIEW.x0 = a; VIEW.x1 = a + w;
+  }
+  function resetZoom() {
+    VIEW = { x0: null, x1: null, y: 1 };
+    if (LAST) renderChart(LAST.st, LAST.m);
+  }
+  $("btnChartReset").addEventListener("click", resetZoom);
+
+  $("chart").addEventListener("wheel", (e) => {
+    if (!LAST) return;
+    const B = viewBounds();
+    if (B.flat) return;
+    const r = $("chart").getBoundingClientRect();
+    const vx = (e.clientX - r.left) / r.width * CH.W;
+    const vy = (e.clientY - r.top) / r.height * CH.H;
+    if (vx < CH.L || vx > CH.L + plot.pw || vy < CH.T || vy > CH.T + plot.ph) return;   // 图外就让页面正常滚动
+    e.preventDefault();
+    if (e.shiftKey) {
+      VIEW.y = Math.min(500, Math.max(1, VIEW.y * (e.deltaY > 0 ? 1 / 1.25 : 1.25)));
+    } else {
+      const t = Math.min(1, Math.max(0, (vx - CH.L) / plot.pw));
+      const w = VIEW.x1 - VIEW.x0;
+      const anchor = VIEW.x0 + t * w;
+      const nw = w * (e.deltaY > 0 ? 1.18 : 1 / 1.18);
+      clampView(anchor - t * nw, anchor - t * nw + nw);
+    }
+    renderChart(LAST.st, LAST.m);
+  }, { passive: false });
+
+  let drag = null;
+  $("chart").addEventListener("pointerdown", (e) => {
+    if (!LAST || e.button !== 0 || viewBounds().flat) return;
+    const r = $("chart").getBoundingClientRect();
+    const vx = (e.clientX - r.left) / r.width * CH.W;
+    if (vx < CH.L || vx > CH.L + plot.pw) return;
+    drag = { x: e.clientX, x0: VIEW.x0, x1: VIEW.x1, moved: false };
+    try { $("chart").setPointerCapture(e.pointerId); } catch (_) {}
+  });
+  $("chart").addEventListener("pointermove", (e) => {
+    if (!drag) return;
+    const dx = e.clientX - drag.x;
+    if (Math.abs(dx) < 3) return;
+    drag.moved = true;
+    hideTip();
+    const r = $("chart").getBoundingClientRect();
+    const d = -(dx / r.width * CH.W) / plot.pw * (drag.x1 - drag.x0);
+    clampView(drag.x0 + d, drag.x1 + d);
+    renderChart(LAST.st, LAST.m);
+  });
+  const endDrag = () => { drag = null; };
+  $("chart").addEventListener("pointerup", endDrag);
+  $("chart").addEventListener("pointercancel", endDrag);
+  $("chart").addEventListener("dblclick", resetZoom);
 
   function renderDetail() {
     const bins = CORE.histogram(dist, S.bin);
