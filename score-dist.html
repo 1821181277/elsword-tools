@@ -194,6 +194,10 @@ tbody tr:hover td{background:rgba(255,255,255,.018)}
 .saved{font-size:11px;color:var(--green)}
 .warn{color:#ff9d9d}
 .grid2{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+.chk{display:inline-flex;align-items:center;gap:7px;font-size:12px;color:var(--muted);cursor:pointer;
+  border:1px solid var(--line);background:#080c13;border-radius:10px;padding:8px 11px;height:34px;white-space:nowrap}
+.chk input{accent-color:#46d5ef;width:14px;height:14px;margin:0}
+.cost-hi{color:#ffd88c;font-weight:650;font-variant-numeric:tabular-nums}
 details{border-top:1px solid var(--line);padding-top:13px}
 details summary{cursor:pointer;color:#d7deeb;font-size:12.5px;font-weight:600;list-style:none;display:flex;align-items:center;gap:8px}
 details summary::-webkit-details-marker{display:none}
@@ -338,6 +342,32 @@ details[open] summary::after{content:"–"}
         <table id="comboConf"><thead><tr><th>把握</th><th>需要次数</th><th>说明</th></tr></thead><tbody></tbody></table>
       </div>
     </div>
+  </div>
+
+  <!-- ============ 成本 ============ -->
+  <div class="card">
+    <h2>成本换算 <span class="tag">洗出来要多少 ED / 多少钱</span></h2>
+    <div class="row">
+      <div class="fld"><label>单次洗练成本（万 ED）</label>
+        <input type="number" id="costPer" min="0" step="100"></div>
+      <div class="fld"><label>汇率（RMB / 亿 ED）</label>
+        <input type="number" id="costRate" min="0" step="0.1"></div>
+      <div class="fld"><label>交易税</label>
+        <label class="chk"><input type="checkbox" id="costTax"> 扣 5%（1 亿到手 9500 万）</label></div>
+      <div class="fld" style="margin-left:auto"><label>实际成本</label>
+        <span class="pill" id="costEff" style="padding:8px 11px">—</span></div>
+    </div>
+    <div class="grid2" id="costGrid" style="margin-top:14px">
+      <div>
+        <div class="muted" style="margin-bottom:6px">目标 M ≥ <b id="costMLabel">22</b> 分 · <span id="costMP">—</span></div>
+        <table id="costM"><thead><tr><th>口径</th><th>洗练次数</th><th>需要 ED</th><th>人民币</th></tr></thead><tbody></tbody></table>
+      </div>
+      <div id="costComboWrap">
+        <div class="muted" style="margin-bottom:6px">组合目标<span id="costComboLabel"></span> · <span id="costComboP">—</span></div>
+        <table id="costCombo"><thead><tr><th>口径</th><th>洗练次数</th><th>需要 ED</th><th>人民币</th></tr></thead><tbody></tbody></table>
+      </div>
+    </div>
+    <div class="muted" style="margin-top:10px">税按「到手」算：<b id="costExample">—</b>。组合那栏没勾词条时会收起。</div>
   </div>
 
   <!-- ============ 分数编辑 ============ -->
@@ -732,7 +762,8 @@ if (typeof globalThis !== "undefined") globalThis.CORE = CORE;
 (() => {
   const $ = (id) => document.getElementById(id);
   const KEY = "elsword.scoreDist.v2";
-  const DEFAULTS = { kind: "figure2", scheme: "sequential", m: 22, n: 100, bin: 0.5 };
+  const DEFAULTS = { kind: "figure2", scheme: "sequential", m: 22, n: 100, bin: 0.5,
+                     costPer: 2000, costRate: 4, costTax: true };   // 万 ED/次 · RMB每亿 · 5% 交易税
 
   const S = { ...DEFAULTS, scores: CORE.presetScores("figure2"), combo: [] };
   const normCombo = (raw) => {
@@ -758,7 +789,8 @@ if (typeof globalThis !== "undefined") globalThis.CORE = CORE;
         else console.warn("存档里的分数表结构不对（要 20 组 × 8 档），已忽略，用默认表");
       }
       for (const k of ["kind", "scheme", "bin"]) if (o[k] !== undefined) S[k] = o[k];
-      for (const k of ["m", "n"]) if (typeof o[k] === "number") S[k] = o[k];
+      for (const k of ["m", "n", "costPer", "costRate"]) if (typeof o[k] === "number") S[k] = o[k];
+      if (typeof o.costTax === "boolean") S.costTax = o.costTax;
       if (Array.isArray(o.combo)) S.combo = normCombo(o.combo);
     } catch (e) { console.warn("读取本地存档失败", e); }
   }
@@ -769,6 +801,7 @@ if (typeof globalThis !== "undefined") globalThis.CORE = CORE;
       try {
         localStorage.setItem(KEY, JSON.stringify({
           kind: S.kind, scheme: S.scheme, m: S.m, n: S.n, bin: S.bin, scores: S.scores, combo: S.combo,
+          costPer: S.costPer, costRate: S.costRate, costTax: S.costTax,
         }));
         const t = new Date().toLocaleTimeString("zh-CN", { hour12: false });
         $("saved").textContent = "已自动保存 " + t;
@@ -857,6 +890,7 @@ if (typeof globalThis !== "undefined") globalThis.CORE = CORE;
     renderChart(st, m);
     renderDetail();
     renderCombo();
+    renderCost();
     renderSimNote();
     renderSimStats();
   }
@@ -1035,6 +1069,57 @@ if (typeof globalThis !== "undefined") globalThis.CORE = CORE;
         .map(([c, t]) => `<tr><td>${(c * 100).toFixed(c >= 0.999 ? 1 : 0)}%</td><td>${num(CORE.rolls(p, c))} 次</td><td>${t}</td></tr>`).join("");
   }
 
+  // ---------------- 成本 ----------------
+  const yiPerRoll = () => Math.max(0, +S.costPer || 0) / 10000;            // 万 ED → 亿
+  const effRate = () => Math.max(0, +S.costRate || 0) / (S.costTax ? 0.95 : 1);  // 含税：买到 1 亿要 4/0.95 元
+  const edTxt = (y) => (y < 100 ? y.toFixed(2) : Math.round(y).toLocaleString("zh-CN")) + " 亿";
+  const rmbTxt = (v) => (v < 100 ? v.toFixed(1) : Math.round(v).toLocaleString("zh-CN")) + " 元";
+
+  function costRows(p) {
+    if (!(p > 0)) return `<tr><td colspan="4" class="muted">概率为 0，洗不出来</td></tr>`;
+    const list = [["1 次", 1], ["期望", CORE.expectedRolls(p)], ["50% 把握", CORE.rolls(p, 0.5)],
+                  ["90% 把握", CORE.rolls(p, 0.9)], ["99% 把握", CORE.rolls(p, 0.99)]];
+    const r = effRate();
+    return list.map(([k, n]) => {
+      const y = n * yiPerRoll();
+      return `<tr><td>${k}</td><td>${num(n, 1)}</td><td>${edTxt(y)}</td><td>${rmbTxt(y * r)}</td></tr>`;
+    }).join("");
+  }
+
+  function renderCost() {
+    const r = effRate();
+    $("costEff").innerHTML = `<b class="cost-hi">${r.toFixed(2)}</b> 元 / 亿` + (S.costTax ? "（含 5% 税）" : "（不含税）");
+    $("costExample").innerHTML = S.costTax
+      ? `1 亿 ED 要付 ${r.toFixed(2)} 元（名义 ${(+S.costRate || 0).toFixed(2)} 元 ÷ 0.95）`
+      : `1 亿 ED 付 ${r.toFixed(2)} 元`;
+    $("costMLabel").textContent = sc(S.m);
+    const pM = dist ? CORE.geq(dist, S.m) : 0;
+    $("costMP").textContent = "单次 " + pct(pM);
+    $("costM").querySelector("tbody").innerHTML = costRows(pM);
+
+    const hasCombo = S.combo.length > 0;
+    $("costComboWrap").hidden = !hasCombo;
+    $("costGrid").style.gridTemplateColumns = hasCombo ? "" : "1fr";
+    if (hasCombo) {
+      const pc = CORE.comboProb(S.combo, S.scheme).p;
+      $("costComboLabel").textContent = `（${S.combo.length} 个词条${S.combo.length > CORE.SLOTS ? "·池子" : ""}）`;
+      $("costComboP").textContent = "单次 " + pct(pc);
+      $("costCombo").querySelector("tbody").innerHTML = costRows(pc);
+    }
+  }
+
+  $("costPer").addEventListener("input", (e) => {
+    const v = parseFloat(e.target.value);
+    if (isFinite(v) && v >= 0) { S.costPer = v; renderCost(); renderSimStats(); save(); }
+  });
+  $("costRate").addEventListener("input", (e) => {
+    const v = parseFloat(e.target.value);
+    if (isFinite(v) && v >= 0) { S.costRate = v; renderCost(); renderSimStats(); save(); }
+  });
+  $("costTax").addEventListener("change", (e) => {
+    S.costTax = e.target.checked; renderCost(); renderSimStats(); save();
+  });
+
   // ---------------- 编辑器 ----------------
   function buildEditor() {
     $("editor").innerHTML = CORE.GROUPS.map((g, gi) => {
@@ -1119,7 +1204,10 @@ if (typeof globalThis !== "undefined") globalThis.CORE = CORE;
           throw new Error("分数表结构不对：需要 20 组、每组 8 档，且每一格都是数字");
         Object.assign(S, { kind: o.kind || "custom", scheme: o.scheme || S.scheme, m: o.m ?? S.m,
                            n: o.n ?? S.n, bin: o.bin ?? S.bin, scores: o.scores,
-                           combo: normCombo(o.combo ?? S.combo) });
+                           combo: normCombo(o.combo ?? S.combo),
+                           costPer: typeof o.costPer === "number" ? o.costPer : S.costPer,
+                           costRate: typeof o.costRate === "number" ? o.costRate : S.costRate,
+                           costTax: typeof o.costTax === "boolean" ? o.costTax : S.costTax });
         if (S.kind !== "figure2" && S.kind !== "toy") markCustom();
         syncInputs(); buildCombo(); buildEditor(); recompute("import");
       } catch (err) { alert("导入失败：" + err.message); }
@@ -1151,6 +1239,9 @@ if (typeof globalThis !== "undefined") globalThis.CORE = CORE;
     $("target").value = S.m;
     $("rolls").value = S.n;
     $("bin").value = String(S.bin);
+    $("costPer").value = S.costPer;
+    $("costRate").value = S.costRate;
+    $("costTax").checked = !!S.costTax;
   }
   $("scheme").addEventListener("change", (e) => { S.scheme = e.target.value; recompute("scheme"); });
   $("target").addEventListener("input", (e) => {
@@ -1275,6 +1366,8 @@ if (typeof globalThis !== "undefined") globalThis.CORE = CORE;
     $("simStats").innerHTML = [
       ["已洗次数", num(SIM.rolls, 0), "本次模拟累计", ""],
       ["平均总分（模拟）", SIM.rolls ? avg.toFixed(3) : "—", st ? "理论 " + st.mean.toFixed(3) : "", ""],
+      ["累计花费", SIM.rolls ? edTxt(SIM.rolls * yiPerRoll()) : "—",
+       SIM.rolls ? "≈ " + rmbTxt(SIM.rolls * yiPerRoll() * effRate()) : "洗一次就开始记", ""],
       ["最好总分", SIM.best < 0 ? "—" : sc(SIM.best),
        SIM.bestAt ? "第 " + num(SIM.bestAt, 0) + " 次" + (SIM.bestRoll ? " · 点击查看" : "") : "",
        SIM.bestRoll ? "click" : ""],
@@ -1346,6 +1439,7 @@ if (typeof globalThis !== "undefined") globalThis.CORE = CORE;
         : why === "cap"
           ? `洗满 ${num(CAP, 0)} 次还没出，这个目标的概率太低`
           : `已停止（洗了 ${num(n, 0)} 次）`;
+      if (n > 0) $("simStatus").innerHTML += `　·　花费 ${edTxt(n * yiPerRoll())} ≈ ${rmbTxt(n * yiPerRoll() * effRate())}`;
     };
 
     const frame = () => {
