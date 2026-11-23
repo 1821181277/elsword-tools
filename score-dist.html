@@ -372,6 +372,7 @@ details[open] summary::after{content:"–"}
             <option value="none">不限（手动点着洗）</option>
             <option value="combo">洗到「组合保底」达标为止</option>
             <option value="score">洗到总分 ≥ M 为止</option>
+            <option value="both">洗到「分数 + 组合」同时满足</option>
           </select></div>
         <div class="fld"><label>手动</label>
           <div class="row" style="gap:8px">
@@ -1201,7 +1202,49 @@ if (typeof globalThis !== "undefined") globalThis.CORE = CORE;
     const g = goalMode();
     if (g === "none") return null;
     if (g === "score") return r.total >= S.m;
-    return CORE.comboHit(r.lines, S.combo);
+    const comboOk = S.combo.length ? CORE.comboHit(r.lines, S.combo) : true;   // 没选词条 = 不卡组合
+    if (g === "combo") return CORE.comboHit(r.lines, S.combo);
+    return r.total >= S.m && comboOk;                                          // both
+  }
+
+  /** 「分数 + 组合」联合概率：精确解要按组做受限卷积（几百 ms），这里用固定种子的蒙特卡洛（10 万次，约 10ms） */
+  let estCache = { key: "", p: 0 };
+  function estBoth(N = 100000) {
+    const key = [S.scheme, S.m,
+      S.combo.map((c) => c.gi + ":" + c.oi).join(","),
+      S.scores.map((r) => r.join(",")).join(";")].join("|");
+    if (estCache.key === key) return estCache.p;
+    const sampler = getSampler(), sc = S.scores, M = S.m;
+    const picks = S.combo.map((c) => [c.gi, c.oi]);
+    const pool = new Int16Array(CORE.GROUPS.length).fill(-1);
+    for (const c of S.combo) pool[c.gi] = c.oi;
+    const poolMode = picks.length > CORE.SLOTS;
+    let seed = 20261123 >>> 0;
+    const rnd = () => { seed ^= seed << 13; seed >>>= 0; seed ^= seed >> 17; seed ^= seed << 5; seed >>>= 0; return seed / 4294967296; };
+    let hit = 0;
+    for (let i = 0; i < N; i++) {
+      const set = sampler(rnd());
+      const o0 = (rnd() * 8) | 0, o1 = (rnd() * 8) | 0, o2 = (rnd() * 8) | 0, o3 = (rnd() * 8) | 0;
+      if (sc[set[0]][o0] + sc[set[1]][o1] + sc[set[2]][o2] + sc[set[3]][o3] < M) continue;
+      let ok;
+      if (!picks.length) ok = true;
+      else if (poolMode) {
+        ok = pool[set[0]] >= 0 && o0 >= pool[set[0]] && pool[set[1]] >= 0 && o1 >= pool[set[1]]
+          && pool[set[2]] >= 0 && o2 >= pool[set[2]] && pool[set[3]] >= 0 && o3 >= pool[set[3]];
+      } else {
+        ok = true;
+        for (let p = 0; p < picks.length; p++) {
+          const gi = picks[p][0], oi = picks[p][1];
+          let got = -1;
+          if (set[0] === gi) got = o0; else if (set[1] === gi) got = o1;
+          else if (set[2] === gi) got = o2; else if (set[3] === gi) got = o3;
+          if (got < oi) { ok = false; break; }
+        }
+      }
+      if (ok) hit++;
+    }
+    estCache = { key, p: hit / N };
+    return estCache.p;
   }
 
   function renderSimRoll(r, meta) {
@@ -1318,18 +1361,23 @@ if (typeof globalThis !== "undefined") globalThis.CORE = CORE;
           if (total > best) { best = total; bestAt = base + n; bestRoll = rawOf(set, [o0, o1, o2, o3]); }
           let hit;
           if (g === "score") hit = total >= M;
-          else if (poolMode) {
-            hit = pool[set[0]] >= 0 && o0 >= pool[set[0]] && pool[set[1]] >= 0 && o1 >= pool[set[1]]
-               && pool[set[2]] >= 0 && o2 >= pool[set[2]] && pool[set[3]] >= 0 && o3 >= pool[set[3]];
-          } else {
-            hit = true;
-            for (let p = 0; p < picks.length; p++) {
-              const gi = picks[p][0], oi = picks[p][1];
-              let got = -1;
-              if (set[0] === gi) got = o0; else if (set[1] === gi) got = o1;
-              else if (set[2] === gi) got = o2; else if (set[3] === gi) got = o3;
-              if (got < oi) { hit = false; break; }
+          else {
+            let comboOk;
+            if (!picks.length) comboOk = true;
+            else if (poolMode) {
+              comboOk = pool[set[0]] >= 0 && o0 >= pool[set[0]] && pool[set[1]] >= 0 && o1 >= pool[set[1]]
+                     && pool[set[2]] >= 0 && o2 >= pool[set[2]] && pool[set[3]] >= 0 && o3 >= pool[set[3]];
+            } else {
+              comboOk = true;
+              for (let p = 0; p < picks.length; p++) {
+                const gi = picks[p][0], oi = picks[p][1];
+                let got = -1;
+                if (set[0] === gi) got = o0; else if (set[1] === gi) got = o1;
+                else if (set[2] === gi) got = o2; else if (set[3] === gi) got = o3;
+                if (got < oi) { comboOk = false; break; }
+              }
             }
+            hit = g === "both" ? (comboOk && total >= M) : comboOk;
           }
           if (hit) { finish(buildRoll(set, [o0, o1, o2, o3]), "hit"); return; }
           if (n >= CAP) { finish(null, "cap"); return; }
@@ -1342,21 +1390,25 @@ if (typeof globalThis !== "undefined") globalThis.CORE = CORE;
     requestAnimationFrame(frame);
   }
 
-  /** 组合面板：只有选了词条组合（且目标不是「按分数」）才挂在结果右边，和结果各占一半 */
+  /** 右边面板跟着目标走：按分数 → 只显示 M；按组合 → 只显示组合；两个都满足 → 都显示 */
   function renderSimTargets() {
     const g = goalMode();
-    const show = S.combo.length > 0 && g !== "score";
+    const showScore = g === "score" || g === "both";
+    const showCombo = (g === "combo" || g === "both") && S.combo.length > 0;
+    const show = showScore || showCombo;
     $("simMain").classList.toggle("solo", !show);
+    $("simBoxScore").hidden = !showScore;
+    $("simBoxCombo").hidden = !showCombo;
 
     const pS = dist ? CORE.geq(dist, S.m) : 0;
-    $("simBoxScore").className = "tbox" + (g === "score" ? " on" : "");
+    $("simBoxScore").className = "tbox" + (g === "score" || g === "both" ? " on" : "");
     $("simScoreMode").textContent = g === "score" ? "启用中" : "";
     $("simScoreVal").textContent = sc(S.m) + " 分";
     $("simScoreSub").innerHTML = pS > 0
       ? `单次 <b>${pct(pS)}</b> · 平均 <b>${num(CORE.expectedRolls(pS))}</b> 次 · 中位 <b>${num(CORE.rolls(pS, 0.5))}</b> 次`
       : `<span class="warn">当前分数表达不到这个分</span>`;
 
-    $("simBoxCombo").className = "tbox" + (g === "combo" ? " on" : "");
+    $("simBoxCombo").className = "tbox" + (g === "combo" || g === "both" ? " on" : "");
     $("simComboMode").textContent = g === "combo" ? "启用中" : "";
     const picks = S.combo;
     if (!picks.length) {
@@ -1391,6 +1443,16 @@ if (typeof globalThis !== "undefined") globalThis.CORE = CORE;
       const pS = dist ? CORE.geq(dist, S.m) : 0;
       bits.push(`分数目标：总分 ≥ <b>${sc(S.m)}</b> 分 · 单次 ${pct(pS)} · 平均 ${num(CORE.expectedRolls(pS))} 次`);
       if (!(pS > 0)) { bits.push('<span class="warn">当前分数表达不到这个分</span>'); bad = true; }
+    } else if (g === "both") {
+      const pS = dist ? CORE.geq(dist, S.m) : 0;
+      if (!(pS > 0)) { bits.push('<span class="warn">当前分数表达不到这个分</span>'); bad = true; }
+      if (!S.combo.length) {
+        bits.push(`同时满足：总分 ≥ <b>${sc(S.m)}</b> 分（还没选词条，只按分数算）· 单次 ${pct(pS)} · 平均 ${num(CORE.expectedRolls(pS))} 次`);
+      } else {
+        const p = estBoth();
+        bits.push(`同时满足：总分 ≥ <b>${sc(S.m)}</b> 分 + 组合达标 · 模拟估计 ${pct(p)} · 平均 ${num(CORE.expectedRolls(p))} 次`);
+        if (!(p > 0)) { bits.push('<span class="warn">这分数下该组合几乎不可能</span>'); bad = true; }
+      }
     }
     $("simAuto").disabled = bad;
     $("simNote").innerHTML = bits.join("　·　");
