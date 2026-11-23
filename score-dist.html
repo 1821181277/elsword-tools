@@ -1,0 +1,1455 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="theme-color" content="#070a10">
+<meta name="description" content="死龙武器 4 词条洗练得分分布计算器：20 个效果组的精确概率卷积、档位分布、目标分数所需次数，以及可自选词条组合的洗练模拟器。">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%230b111a'/%3E%3Cpath d='M16 5l9 8-9 14L7 13z' fill='%2346d5ef' opacity='.9'/%3E%3C/svg%3E">
+<title>死龙武器 · 洗练得分计算与模拟</title>
+<style>
+:root{
+  --bg:#070a10; --panel:#10151f; --panel-2:#0b0f17;
+  --line:rgba(255,255,255,.075); --line-strong:rgba(255,255,255,.14);
+  --txt:#e9edf6; --muted:#a2abbd; --dim:#7d879b;
+  --cyan:#46d5ef; --cyan-dim:rgba(70,213,239,.14);
+  --gold:#f0c46a; --gold-dim:rgba(240,196,106,.12);
+  --purple:#a78bfa; --green:#3ddc97; --red:#ff9d9d;
+  --radius:20px;
+}
+*,*::before,*::after{box-sizing:border-box}
+html{color-scheme:dark}
+body{
+  margin:0;min-height:100vh;color:var(--txt);font-size:13.5px;line-height:1.6;
+  font-family:-apple-system,BlinkMacSystemFont,"PingFang SC","Hiragino Sans GB","Microsoft YaHei","Noto Sans SC",sans-serif;
+  background:
+    radial-gradient(900px 620px at 8% -12%, rgba(70,213,239,.13), transparent 62%),
+    radial-gradient(760px 560px at 102% -4%, rgba(167,139,250,.10), transparent 58%),
+    radial-gradient(900px 700px at 60% 110%, rgba(240,196,106,.05), transparent 60%),
+    var(--bg);
+  -webkit-font-smoothing:antialiased;text-rendering:optimizeLegibility;
+}
+a{color:inherit}
+button{font:inherit}
+
+/* ---------- masthead ---------- */
+.masthead{max-width:1240px;margin:0 auto;padding:36px 24px 6px;display:flex;align-items:flex-start;justify-content:space-between;gap:20px;animation:rise .55s ease both}
+.brand{min-width:0}
+.eyebrow{font-size:10.5px;letter-spacing:.24em;color:var(--cyan);text-transform:uppercase;margin-bottom:5px;font-weight:600}
+h1{font-size:clamp(23px,2.6vw,31px);line-height:1.16;margin:0 0 7px;letter-spacing:.01em;font-weight:750}
+.sub{margin:0;font-size:12.5px;color:var(--muted);line-height:1.6;max-width:900px}
+.actions{display:flex;gap:8px;flex-wrap:wrap;justify-content:flex-end;padding-top:6px}
+.actions a{font-size:11.5px;color:var(--muted);text-decoration:none;white-space:nowrap;
+  border:1px solid var(--line);background:rgba(255,255,255,.025);padding:8px 13px;border-radius:999px;
+  transition:color .16s,border-color .16s,background .16s}
+.actions a:hover{color:#fff;border-color:rgba(70,213,239,.35);background:rgba(70,213,239,.08)}
+
+/* ---------- layout ---------- */
+.wrap{max-width:1240px;margin:22px auto 0;padding:0 24px}
+.card{
+  background:linear-gradient(180deg,rgba(255,255,255,.04),rgba(255,255,255,.012));
+  border:1px solid var(--line);border-radius:var(--radius);
+  box-shadow:0 26px 50px -30px rgba(0,0,0,.85),inset 0 1px 0 rgba(255,255,255,.05);
+  padding:20px 24px;margin-bottom:18px;min-width:0;animation:rise .55s ease both;
+}
+.card h2{font-size:15px;font-weight:650;margin:0 0 12px;letter-spacing:.01em;display:flex;align-items:center;gap:9px;flex-wrap:wrap}
+.card h2 .tag{flex:0 0 auto;font-size:10px;color:var(--cyan);background:rgba(70,213,239,.07);
+  border:1px solid rgba(70,213,239,.17);padding:3px 8px;border-radius:999px;white-space:nowrap;font-weight:400}
+.tag.verdict-ok{color:var(--green)!important;border-color:rgba(61,220,151,.35)!important;background:rgba(61,220,151,.08)!important}
+.tag.verdict-no{color:var(--dim)!important}
+
+/* ---------- tabs ---------- */
+.tabs{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin:0 0 16px}
+.tabs button{padding:9px 18px;border-radius:999px;font-size:12.5px;font-weight:650;color:var(--muted);border-color:var(--line)}
+.tabs button.on{color:#d9f8ff;border-color:rgba(70,213,239,.45);
+  background:linear-gradient(180deg,rgba(70,213,239,.24),rgba(70,213,239,.10));
+  box-shadow:0 0 0 3px rgba(70,213,239,.06)}
+.tabs button.on:hover{background:linear-gradient(180deg,rgba(70,213,239,.30),rgba(70,213,239,.14))}
+.tabs .tabhint{font-size:10.5px;color:var(--dim);margin-left:2px}
+
+/* ---------- form ---------- */
+.row{display:flex;flex-wrap:wrap;gap:14px;align-items:flex-end}
+.fld{display:flex;flex-direction:column;gap:5px}
+.fld label{font-size:11px;color:var(--dim);font-weight:600;letter-spacing:.02em}
+input[type=number],input[type=text],select{
+  border:1px solid var(--line);border-radius:10px;padding:7px 9px;font:inherit;font-size:12.5px;
+  background:#080c13;color:var(--txt);transition:border-color .16s,box-shadow .16s}
+input[type=number]{width:92px}
+input:focus,select:focus{outline:none;border-color:rgba(70,213,239,.6);box-shadow:0 0 0 3px rgba(70,213,239,.12)}
+button{border:1px solid var(--line);background:rgba(255,255,255,.03);color:var(--muted);border-radius:10px;
+  padding:8px 13px;font:inherit;font-size:12px;cursor:pointer;
+  transition:color .15s,border-color .15s,background .15s}
+button:hover{color:#fff;border-color:var(--line-strong);background:rgba(255,255,255,.06)}
+button:disabled{opacity:.45;cursor:not-allowed}
+button.primary{color:#06121a;background:linear-gradient(180deg,#8ef0ff,#46d5ef);border-color:#46d5ef;font-weight:700}
+button.primary:hover{background:linear-gradient(180deg,#a6f4ff,#5cdcf3)}
+button.mini{padding:3px 8px;font-size:11px}
+
+/* ---------- kpi ---------- */
+.cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:10px}
+.kpi{border:1px solid rgba(255,255,255,.055);border-radius:12px;padding:11px 13px;background:rgba(255,255,255,.03)}
+.kpi .k{font-size:10.5px;color:var(--dim);letter-spacing:.02em}
+.kpi .v{font-size:20px;font-weight:650;margin-top:3px;color:#eef4fd;font-variant-numeric:tabular-nums;letter-spacing:-.01em}
+.kpi .x{font-size:10px;color:var(--dim);margin-top:3px;line-height:1.5}
+.kpi.hl{border-color:rgba(70,213,239,.24);background:linear-gradient(180deg,rgba(70,213,239,.10),rgba(70,213,239,.03))}
+.kpi.hl .v{color:#9bf1ff}
+.kpi.hl2{border-color:rgba(240,196,106,.22);background:linear-gradient(180deg,rgba(240,196,106,.10),rgba(240,196,106,.03))}
+.kpi.hl2 .v{color:#ffd88c;font-size:17px}
+.kpi.click{cursor:pointer;transition:border-color .15s,background .15s,transform .12s}
+.kpi.click:hover{border-color:rgba(240,196,106,.45);background:rgba(240,196,106,.06)}
+.kpi.click:active{transform:translateY(1px)}
+.kpi.click .x{color:#c9a45e}
+
+/* ---------- table ---------- */
+table{border-collapse:collapse;width:100%;font-variant-numeric:tabular-nums}
+th,td{border-bottom:1px solid rgba(255,255,255,.045);padding:8px 12px;text-align:right;font-size:12px;color:#cdd7e7}
+th:first-child,td:first-child{text-align:left}
+thead th{color:var(--dim);font-weight:600;font-size:10.5px;letter-spacing:.05em;background:var(--panel);
+  position:sticky;top:0;z-index:1;white-space:nowrap}
+tbody tr:hover td{background:rgba(255,255,255,.018)}
+.scroll{max-height:460px;overflow:auto;border:1px solid var(--line);border-radius:12px;scrollbar-width:thin}
+
+/* ---------- score editor ---------- */
+.grow{display:flex;align-items:center;gap:12px;padding:8px 10px;border-bottom:1px solid rgba(255,255,255,.04)}
+.grow:nth-child(even){background:rgba(255,255,255,.014)}
+.grow:last-child{border-bottom:0}
+.gname{width:250px;flex:none;font-size:12px;display:flex;flex-direction:column;color:#dfe7f4}
+.gname .gw{font-size:10.5px;color:var(--dim)}
+.gname .gzero{color:#ff9d9d;font-size:10.5px}
+.cells{display:flex;gap:6px;flex-wrap:wrap}
+.cell{display:flex;flex-direction:column;align-items:center;gap:3px}
+.cell span{font-size:10px;color:var(--dim);white-space:nowrap}
+.cell input{width:64px;text-align:center;padding:4px;font-size:12px}
+
+/* ---------- chart ---------- */
+#chart{width:100%;height:auto;display:block}
+.chartwrap{position:relative}
+#chart line,#chart text,#chart polyline{pointer-events:none}
+#chart g:hover rect.bar{fill:#8ef0ff}
+#chart g:hover rect.hit{fill:rgba(70,213,239,.06)}
+#tip{position:absolute;left:0;top:0;display:none;pointer-events:none;z-index:6;
+  background:rgba(9,13,21,.97);border:1px solid rgba(255,255,255,.15);border-radius:10px;
+  padding:8px 11px;font-size:11px;line-height:1.62;color:#c7d1e1;white-space:nowrap;
+  box-shadow:0 16px 34px rgba(0,0,0,.6)}
+#tip .t-range{color:var(--dim);font-size:10.5px}
+#tip .t-p{font-size:15px;font-weight:650;color:#eaf6ff;font-variant-numeric:tabular-nums}
+#tip .t-cum{color:var(--gold);font-size:10.5px;font-variant-numeric:tabular-nums}
+
+/* ---------- combo picker ---------- */
+.combo-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(330px,1fr));gap:2px 18px;margin-top:2px}
+.crow{display:flex;align-items:center;gap:7px;padding:4px 6px;border-radius:8px;font-size:12px;cursor:pointer;
+  border:1px solid transparent;transition:background .14s,border-color .14s}
+.crow:hover{background:rgba(255,255,255,.03)}
+.crow.on{background:rgba(70,213,239,.07);border-color:rgba(70,213,239,.22)}
+.crow .cname{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:#dfe7f4}
+.crow select{padding:2px 4px;font-size:11.5px}
+.crow .cf{width:46px;text-align:right;color:var(--dim);font-size:11px;font-variant-numeric:tabular-nums}
+.crow input[type=checkbox]{accent-color:#46d5ef;width:14px;height:14px;margin:0}
+
+/* ---------- targets ---------- */
+.sim-main{display:grid;grid-template-columns:minmax(0,1fr) 342px;gap:18px;align-items:start}
+.sim-main.solo{grid-template-columns:minmax(0,1fr)}
+.sim-main.solo .sim-target{display:none}
+.sim-target{display:grid;gap:10px;min-width:0}
+.tbox{border:1px solid rgba(255,255,255,.06);border-radius:14px;padding:13px 15px;
+  background:rgba(255,255,255,.025);transition:opacity .16s,border-color .16s,background .16s;min-width:0}
+.tbox.on{border-color:rgba(70,213,239,.30);background:linear-gradient(180deg,rgba(70,213,239,.08),rgba(70,213,239,.02))}
+.tbox .tl{font-size:10.5px;color:var(--dim);letter-spacing:.08em;font-weight:600;display:flex;justify-content:space-between;gap:8px}
+.tbox .tl .on-tag{color:var(--cyan);letter-spacing:.04em}
+.tbox .tv{font-size:26px;font-weight:750;margin:4px 0 2px;font-variant-numeric:tabular-nums;letter-spacing:-.01em;
+  background:linear-gradient(92deg,#ffe6b0,#f0b95c 58%,#dc9b36);-webkit-background-clip:text;background-clip:text;color:transparent}
+.tbox .ts{font-size:11px;color:var(--muted);line-height:1.6}
+.tbox .ts b{color:#dfe7f4;font-weight:600;font-variant-numeric:tabular-nums}
+.chips{display:flex;flex-wrap:wrap;gap:6px;margin:7px 0 6px}
+.chip{display:inline-flex;align-items:baseline;gap:5px;padding:4px 9px;border-radius:8px;font-size:11px;
+  background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.08);color:#dbe6f5;line-height:1.4}
+.chip em{font-style:normal;color:#9aa5b8;font-variant-numeric:tabular-nums}
+.chip.t0{border-color:rgba(90,169,255,.45);background:rgba(90,169,255,.12)}
+.chip.t1{border-color:rgba(61,220,151,.40);background:rgba(61,220,151,.10)}
+.chip.t2{border-color:rgba(167,139,250,.42);background:rgba(167,139,250,.12)}
+.chip.t3{border-color:rgba(240,196,106,.45);background:rgba(240,196,106,.12)}
+.chip.t3 em{color:#ffd88c}
+
+/* ---------- simulator ---------- */
+.sline{display:flex;align-items:center;gap:10px;padding:8px 12px;border-radius:10px;
+  border-left:4px solid var(--line);background:rgba(255,255,255,.03);margin-bottom:6px}
+.sline .sname{flex:1;font-size:12.5px;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:#e6edf9}
+.sline .slv{font-size:12px;color:var(--muted);font-variant-numeric:tabular-nums;min-width:56px;text-align:right}
+.sline .sscore{font-weight:650;min-width:56px;text-align:right;font-variant-numeric:tabular-nums;color:#dbe6f5}
+.sline.t0{border-left-color:#5aa9ff;background:rgba(90,169,255,.09)}
+.sline.t1{border-left-color:#3ddc97;background:rgba(61,220,151,.08)}
+.sline.t2{border-left-color:#a78bfa;background:rgba(167,139,250,.09)}
+.sline.t3{border-left-color:#f0c46a;background:rgba(240,196,106,.10)}
+.sline.t3 .sscore{color:#ffd88c}
+.dot{display:inline-block;width:9px;height:9px;border-radius:50%;margin:0 4px 0 10px;vertical-align:middle}
+.dot.t0{background:#5aa9ff}.dot.t1{background:#3ddc97}.dot.t2{background:#a78bfa}.dot.t3{background:#f0c46a}
+.simtotal{display:flex;align-items:baseline;gap:10px;margin:6px 0 14px;padding-left:2px}
+.simtotal b{font-size:28px;font-weight:750;font-variant-numeric:tabular-nums;letter-spacing:-.01em;
+  background:linear-gradient(92deg,#ffe6b0,#f0b95c 58%,#dc9b36);
+  -webkit-background-clip:text;background-clip:text;color:transparent}
+
+/* ---------- misc ---------- */
+.muted{color:var(--dim);font-size:11.5px;line-height:1.65}
+.muted b{color:#c3cede;font-weight:600}
+.saved{font-size:11px;color:var(--green)}
+.warn{color:#ff9d9d}
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+details{border-top:1px solid var(--line);padding-top:13px}
+details summary{cursor:pointer;color:#d7deeb;font-size:12.5px;font-weight:600;list-style:none;display:flex;align-items:center;gap:8px}
+details summary::-webkit-details-marker{display:none}
+details summary::after{content:"+";color:var(--dim);font-size:15px;margin-left:auto}
+details[open] summary::after{content:"–"}
+.pill{display:inline-block;font-size:10.5px;border-radius:20px;padding:1px 8px;border:1px solid var(--line);color:var(--dim)}
+.footer{max-width:1240px;margin:0 auto;padding:6px 24px 46px;color:#7a8498;font-size:10.5px;line-height:1.75}
+.footer b{color:#b9c4d6;font-weight:600}
+
+@keyframes rise{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:none}}
+@media (prefers-reduced-motion:reduce){*,*::before,*::after{animation:none!important;transition:none!important}}
+@media (max-width:820px){
+  .grid2{grid-template-columns:1fr}
+  .sim-main{grid-template-columns:minmax(0,1fr)}
+  .gname{width:165px}
+  .masthead{flex-direction:column;align-items:stretch;padding:26px 16px 4px}
+  .actions{justify-content:flex-start;padding-top:2px}
+  .wrap{padding:0 16px}
+  .card{padding:16px 16px}
+}
+</style>
+</head>
+<body>
+<header class="masthead">
+  <div class="brand">
+    <div class="eyebrow">Elsword · 死龙武器</div>
+    <h1>洗练得分分布计算 · 模拟器</h1>
+    <p class="sub">20 个效果组（图1：5 组 ×0.8%、15 组 ×6.4%，组内 8 档等概率）、每次洗练 4 条且效果组不重复；分数 = 4 条词条得分之和。每个档位的分数都能改，改完立刻重算并自动保存。</p>
+  </div>
+  <div class="actions">
+    <a href="./">← 工具集</a>
+    <a href="https://1821181277.github.io/elsword-tools/" target="_blank" rel="noopener">GitHub Pages</a>
+  </div>
+</header>
+
+<div class="wrap">
+
+  <div class="tabs">
+    <button id="tabCalc" class="on" data-page="calc">洗练计算器</button>
+    <button id="tabSim" data-page="sim">洗练模拟</button>
+    <span class="tabhint">两边共用同一份分数表、抽取方式和选中的组合</span>
+  </div>
+
+  <div id="page-calc">
+  <!-- ============ 控制区 ============ -->
+  <div class="card">
+    <h2>参数 <span class="tag">改完自动保存</span><span id="saved" class="saved"></span></h2>
+    <div class="row">
+      <div class="fld"><label>分数表预设</label>
+        <select id="preset">
+          <option value="figure2">图2 逐档评分表（默认）</option>
+          <option value="toy">小玩具 v1.2 线性系数</option>
+          <option value="custom" hidden>自定义</option>
+        </select></div>
+      <div class="fld"><label>效果组抽取方式</label>
+        <select id="scheme">
+          <option value="sequential">顺序加权不放回（默认）</option>
+          <option value="product">独立抽·重复整次重抽</option>
+          <option value="uniform">20 组等概率取 4（对照）</option>
+        </select></div>
+      <div class="fld"><label>目标分数 M</label>
+        <input type="number" id="target" step="0.5" min="0"></div>
+      <div class="fld"><label>洗练次数 N</label>
+        <input type="number" id="rolls" step="1" min="1"></div>
+      <div class="fld"><label>图中分箱宽度</label>
+        <select id="bin"><option value="0.5">0.5 分</option><option value="0.25">0.25 分</option>
+        <option value="0.1">0.1 分</option><option value="1">1 分</option></select></div>
+      <div class="fld"><label>&nbsp;</label>
+        <div class="row" style="gap:8px">
+          <button id="btnExport">导出 JSON</button>
+          <button id="btnImport">导入 JSON</button>
+          <button id="btnCsv">导出分布 CSV</button>
+          <button id="btnReset">恢复默认</button>
+          <input type="file" id="file" accept=".json" hidden>
+        </div></div>
+    </div>
+    <div class="muted" style="margin-top:8px">
+      分数按 <b>0.001 分</b>精度参与计算；分数表固定为图1 的 20 组 × 8 档（档位数值与出现概率写在代码里）。
+      目标 M 与洗练次数 N 改了不会重算分布，只重算指标。<br>
+      “四条不重复”有两种实现：<b>顺序不放回</b> = 抽走一条就把它的权重扣掉再抽下一条；<b>整次重抽</b> = 四条独立抽、撞车就整组重来（等价于条件分布）。
+      两者 P(≥M) 差约 6%，按能确认的机制选。
+    </div>
+  </div>
+
+  <!-- ============ 指标 ============ -->
+  <div class="card">
+    <h2>目标 M 分以上</h2>
+    <div class="cards" id="kpiTarget"></div>
+    <div style="margin-top:10px" class="muted" id="mNote"></div>
+  </div>
+
+  <div class="card">
+    <h2>整体分布</h2>
+    <div class="cards" id="kpiAll"></div>
+    <div style="margin-top:12px">
+      <table id="tierTable"><thead><tr><th>档位</th><th>区间</th><th>概率</th><th>期望洗练次数</th>
+        <th>中位次数</th><th>90% 把握</th><th>99% 把握</th></tr></thead><tbody></tbody></table>
+    </div>
+  </div>
+
+  <!-- ============ 图 ============ -->
+  <div class="card">
+    <h2>概率分布图 <span class="tag">青柱 = 该分数区间的概率（左轴）；金线 = P(总分 ≥ x)（右轴）</span></h2>
+    <div class="chartwrap">
+      <svg id="chart" viewBox="0 0 1000 440" preserveAspectRatio="xMidYMid meet"></svg>
+      <div id="tip"></div>
+    </div>
+    <div class="muted">虚线 = 目标 M；彩虚线 = 19 / 22 / 25 / 30 分档位线。鼠标移到柱子上（或那一列的空白处）会浮出该区间的概率与累计概率。</div>
+  </div>
+
+  <!-- ============ N 次洗练 ============ -->
+  <div class="card">
+    <h2>洗练 N 次，至少出现一次 ≥ M 的概率 <span class="tag">1 − (1 − p)^N</span></h2>
+    <div class="grid2">
+      <div><table id="nTable"><thead><tr><th>洗练次数 N</th><th>至少一次 ≥ M</th><th>一次都没出 ≥ M</th></tr></thead><tbody></tbody></table></div>
+      <div>
+        <div class="muted" style="margin-bottom:6px">反查：想有多少把握，需要洗多少次（按上面 p 计算）</div>
+        <table id="confTable"><thead><tr><th>把握</th><th>需要的洗练次数</th><th>说明</th></tr></thead><tbody></tbody></table>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============ 组合保底 ============ -->
+  <div class="card">
+    <h2>组合保底：自选词条 + 最低档位 <span class="tag">至少见到一次</span></h2>
+    <div class="muted" style="margin-bottom:10px">
+      勾选你想要的词条，给每个词条选一个<b>可接受的最低档位</b>（档位越高越难），右侧百分比是「这一档及以上」在组内的占比。
+      <b>选 4 个以内</b>：要求这些词条全部出现且都达标；<b>选 5 个以上</b>：把它们当候选池，4 条词条<b>全落在池子里</b>就算命中（= 命中其中任意 4 个），各自仍要达最低档。
+      算出来的是一次洗练达标的概率，以及要洗多少次才能见到一次。
+    </div>
+    <div class="row" style="margin-bottom:6px">
+      <button id="btnComboClear">清空选择</button>
+      <button id="btnComboSim">拿这个组合去模拟</button>
+      <span class="muted" id="comboHint">还没选词条</span>
+    </div>
+    <div class="combo-grid" id="comboPicker"></div>
+    <div class="cards" id="kpiCombo" style="margin-top:12px"></div>
+    <div class="grid2" style="margin-top:12px">
+      <div><table id="comboTable"><thead><tr><th>洗练次数 N</th><th>恰好第 N 次才命中</th><th>N 次内至少命中一次</th></tr></thead><tbody></tbody></table></div>
+      <div>
+        <div class="muted" style="margin-bottom:6px">反查：想有多少把握，需要洗多少次</div>
+        <table id="comboConf"><thead><tr><th>把握</th><th>需要次数</th><th>说明</th></tr></thead><tbody></tbody></table>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============ 分数编辑 ============ -->
+  <div class="card">
+    <h2>词条分数表（可编辑） <span class="tag">改任意一格 → 立刻重算 + 自动保存</span></h2>
+    <div class="muted" style="margin-bottom:8px">
+      格式：<b>档位数值</b> 下方是 <b>该档位得分</b>；标 <span class="warn">0 分</span> 的词条表示图2 里没有评分列。
+      用「导出 JSON」可以把当前分数表存成文件备份。
+    </div>
+    <div class="scroll" id="editor"></div>
+  </div>
+
+  <!-- ============ 明细 ============ -->
+  <div class="card">
+    <details>
+      <summary>展开：分布明细表（按当前分箱宽度，含累计概率）</summary>
+      <div class="scroll" style="max-height:420px;margin-top:10px">
+        <table id="detail"><thead><tr><th>分数区间</th><th>该区间概率</th><th>累计 P(≥ 区间下界)</th></tr></thead><tbody></tbody></table>
+      </div>
+    </details>
+  </div>
+
+  </div>
+
+  <!-- ============ 洗练模拟 ============ -->
+  <div id="page-sim" hidden>
+    <div class="card">
+      <h2>洗练模拟器 <span class="tag">按当前分数表 / 抽取方式跑</span></h2>
+      <div class="row">
+        <div class="fld"><label>目标</label>
+          <select id="simGoal">
+            <option value="none">不限（手动点着洗）</option>
+            <option value="combo">洗到「组合保底」达标为止</option>
+            <option value="score">洗到总分 ≥ M 为止</option>
+          </select></div>
+        <div class="fld"><label>手动</label>
+          <div class="row" style="gap:8px">
+            <button id="simRoll1">洗 1 次</button>
+            <button id="simRoll10">×10</button>
+            <button id="simRoll100">×100</button>
+            <button id="simReset">重置统计</button>
+          </div></div>
+        <div class="fld"><label>自动</label>
+          <div class="row" style="gap:8px">
+            <button id="simAuto" class="primary">开始自动洗</button>
+            <button id="simStop" hidden>停止</button>
+          </div></div>
+      </div>
+      <div class="muted" id="simNote" style="margin-top:10px"></div>
+      <div class="muted" id="simStatus" style="margin-top:4px"></div>
+    </div>
+
+    <div class="card">
+      <h2>本次结果 <span class="tag" id="simVerdict">—</span></h2>
+      <div class="sim-main" id="simMain">
+        <div class="sim-roll">
+          <div id="simLines"><div class="muted">点「洗 1 次」开始</div></div>
+          <div class="simtotal"><span class="muted">总分</span><b id="simTotal">—</b><span class="muted" id="simTotalNote"></span></div>
+        </div>
+        <aside class="sim-target" id="simTargetPane">
+          <div class="tbox" id="simBoxScore">
+            <div class="tl"><span>分数目标 M</span><span class="on-tag" id="simScoreMode"></span></div>
+            <div class="tv" id="simScoreVal">—</div>
+            <div class="ts" id="simScoreSub">—</div>
+          </div>
+          <div class="tbox" id="simBoxCombo">
+            <div class="tl"><span>洗练组合</span><span class="on-tag" id="simComboMode"></span></div>
+            <div class="chips" id="simComboChips"><span class="muted">还没选词条</span></div>
+            <div class="ts" id="simComboSub">—</div>
+          </div>
+          <div class="muted" style="font-size:10.5px">目标在「洗练计算器 → 参数 / 组合保底」里改</div>
+        </aside>
+      </div>
+      <div class="cards" id="simStats"></div>
+      <div class="muted" style="margin-top:10px">
+        档位配色（次 → 好）：<i class="dot t0"></i>1~2 档　<i class="dot t1"></i>3~4 档　<i class="dot t2"></i>5~7 档　<i class="dot t3"></i>最高档
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<footer class="footer">
+    数据来源：图1 = 韩服官网概率公示（20 组 × 8 档）；图2 = 词条评分表（逐档）。
+    「小玩具 v1.2 线性系数」= 从那个 exe 里反编译出来的算法，覆盖 13 个词条：多数系数 = 「图2 最高档分 ÷ 最高档数值」，
+    %攻 / 爆伤 / 攻等 / 全技伤 4 个是 exe 原值（与该式有 1.5%~5.6% 出入），「攻击时额外攻击」逐档写死、与图2 同表。
+    计算模型：效果组不重复抽取，组内 8 档等概率，精确卷积（不是模拟）。
+</footer>
+
+<!-- ==================================================================
+     核心算法（纯计算，无 DOM 依赖；可被 node 抽出来做单元测试）
+     ================================================================== -->
+<script id="core">
+const CORE = (() => {
+  const ENH = [0.8, 0.9, 1.0, 1.1, 1.2, 1.3, 1.4, 1.5];
+  const rng = (a, b, s = 1) => { const o = []; for (let x = a; x <= b + 1e-9; x += s) o.push(+x.toFixed(4)); return o; };
+
+  // 图1：20 个效果组（w = 效果组出现概率，opts = 组内 8 档数值）
+  const GROUPS = [
+    { name: "物理/魔法攻击力（强化等级）",     w: 0.008, table: "强化%攻",   opts: ENH },
+    { name: "物理/魔法攻击力等级（强化等级）", w: 0.008, table: "强化攻等",  opts: ENH },
+    { name: "暴击伤害（强化等级）",           w: 0.008, table: "强化爆伤",  opts: ENH },
+    { name: "所有技能伤害（强化等级）",       w: 0.008, table: "强化全技伤", opts: ENH },
+    { name: "物理/魔法防御力（强化等级）",     w: 0.008, table: null,       opts: ENH },
+    { name: "攻击时，3秒内造成攻击伤害的额外攻击", w: 0.064, table: "3秒额外攻", opts: rng(5, 12) },
+    { name: "无视敌人物理/魔法防御力",        w: 0.064, table: null,       opts: rng(4.5, 8, 0.5) },
+    { name: "物理/魔法攻击力",                w: 0.064, table: "%攻",       opts: rng(6, 13) },
+    { name: "两极化：攻击/被击伤害",          w: 0.064, table: "两极化",    opts: rng(5, 12) },
+    { name: "暴击伤害",                       w: 0.064, table: "爆伤",      opts: rng(6, 13) },
+    { name: "物理/魔法攻击力等级",            w: 0.064, table: "攻等",      opts: rng(6, 13) },
+    { name: "物理/魔法防御力",                w: 0.064, table: null,       opts: rng(6, 13) },
+    { name: "减少伤害",                       w: 0.064, table: null,       opts: rng(8, 15) },
+    { name: "给BOSS怪物造成的伤害",           w: 0.064, table: "B伤",       opts: rng(8, 15) },
+    { name: "受到BOSS怪物的伤害减少",         w: 0.064, table: null,       opts: rng(8, 15) },
+    { name: "强韧的技能伤害",                 w: 0.064, table: null,       opts: rng(6, 13) },
+    { name: "强烈的技能伤害",                 w: 0.064, table: "M2/M3",    opts: rng(6, 13) },
+    { name: "超越的技能伤害",                 w: 0.064, table: "M2/M3",    opts: rng(6, 13) },
+    { name: "所有技能伤害",                   w: 0.064, table: "全技伤",    opts: rng(6, 13) },
+    { name: "动作速度",                       w: 0.064, table: null,       opts: rng(8, 15) },
+  ];
+  const ENHANCED = new Set([0, 1, 2, 3, 4]);   // 前 5 组是「强化等级」类，档位是每级系数
+
+  // 图2：逐档评分表
+  const T2 = {
+    "强化%攻":   { 0.8: 5, 0.9: 6, 1.0: 6.5, 1.1: 7, 1.2: 7.5, 1.3: 8, 1.4: 9, 1.5: 9.5 },
+    "强化全技伤": { 0.8: 4.5, 0.9: 5, 1.0: 5.5, 1.1: 6.5, 1.2: 7, 1.3: 7.5, 1.4: 8, 1.5: 8.5 },
+    "强化攻等":   { 0.8: 4, 0.9: 4.5, 1.0: 5, 1.1: 5.5, 1.2: 6, 1.3: 6.5, 1.4: 7, 1.5: 7.5 },
+    "强化爆伤":   { 0.8: 4, 0.9: 4.5, 1.0: 5, 1.1: 5.5, 1.2: 6, 1.3: 6.5, 1.4: 7, 1.5: 7.5 },
+    "3秒额外攻":  { 5: 3.3, 6: 4, 7: 4.7, 8: 5.3, 9: 6, 10: 6.7, 11: 7.3, 12: 8 },
+    "%攻":       { 6: 3, 7: 3.5, 8: 4, 9: 4.5, 10: 5.5, 11: 6, 12: 6.5, 13: 7 },
+    "全技伤":     { 6: 0, 7: 0, 8: 4, 9: 4.5, 10: 4.5, 11: 5, 12: 6, 13: 6.5 },
+    "攻等":       { 6: 2, 7: 2.5, 8: 3, 9: 3.5, 10: 4, 11: 4.5, 12: 5, 13: 5.5 },
+    "爆伤":       { 6: 2.5, 7: 3, 8: 3.5, 9: 3.5, 10: 4, 11: 4.5, 12: 5, 13: 5.5 },
+    "两极化":     { 5: 0, 6: 4, 7: 4.5, 8: 5, 9: 6, 10: 6.5, 11: 7, 12: 8 },
+    "M2/M3":     { 6: 0, 7: 0, 8: 3, 9: 3.5, 10: 4, 11: 4.5, 12: 5, 13: 5.5 },
+    "B伤":       { 8: 2.5, 9: 3, 10: 3.5, 11: 4, 12: 4, 13: 4.5, 14: 4.5, 15: 5 },
+  };
+
+  // 小玩具 v1.2：多数系数 = 图2 该词条最高档分 ÷ 最高档数值；它只认 13 个词条，其余 = 0。
+  // 例外 1：%攻 / 爆伤 / 攻等 / 全技伤 这 4 个常数比该式低 1.5%~5.6%，按 exe 原值保留（别照公式改）
+  // 例外 2：「攻击时额外攻击」是逐档值（8/12 = 2/3 的 1 位小数），不走线性系数，见下方 TOY_EXACT
+  const TOY = {
+    "物理/魔法攻击力（强化等级）": 19 / 3,
+    "物理/魔法攻击力等级（强化等级）": 5,
+    "暴击伤害（强化等级）": 5,
+    "所有技能伤害（强化等级）": 17 / 3,
+    "物理/魔法攻击力": 19 / 36,
+    "两极化：攻击/被击伤害": 2 / 3,
+    "暴击伤害": 5 / 12,
+    "物理/魔法攻击力等级": 5 / 12,
+    "给BOSS怪物造成的伤害": 1 / 3,
+    "强烈的技能伤害": 11 / 26,
+    "超越的技能伤害": 11 / 26,
+    "所有技能伤害": 17 / 36,
+  };
+  // 这两个预设用同一张逐档表：toy 不走线性系数，直接取图2 的档位分
+  const TOY_EXACT = new Set(["攻击时，3秒内造成攻击伤害的额外攻击"]);
+
+  const SLOTS = 4;
+  const Q = 1000;                       // 内部整数网格：1 单位 = 0.001 分
+  const q = (x) => Math.round(x * Q);
+  const toScore = (k) => k / Q;
+
+  function presetScores(kind) {
+    return GROUPS.map((g) => g.opts.map((v) => {
+      if (kind === "figure2") return g.table ? (T2[g.table][v] ?? 0) : 0;
+      if (TOY_EXACT.has(g.name) && g.table) return T2[g.table][v] ?? 0;
+      return +(((TOY[g.name] ?? 0) * v).toFixed(6));
+    }));
+  }
+
+  function combos(n, k) {
+    const out = [], idx = [];
+    (function rec(s) {
+      if (idx.length === k) { out.push(idx.slice()); return; }
+      for (let i = s; i < n; i++) { idx.push(i); rec(i + 1); idx.pop(); }
+    })(0);
+    return out;
+  }
+
+  function setProbs(scheme) {
+    const n = GROUPS.length, C = combos(n, SLOTS), out = [];
+    if (scheme === "uniform") { for (const c of C) out.push([c, 1 / C.length]); return out; }
+    if (scheme === "product") {
+      let tot = 0; const raw = [];
+      for (const c of C) { let p = 1; for (const i of c) p *= GROUPS[i].w; raw.push(p); tot += p; }
+      for (let i = 0; i < C.length; i++) out.push([C[i], raw[i] / tot]);
+      return out;
+    }
+    const m = new Map(), perm = [], used = new Array(n).fill(0);
+    (function rec() {
+      if (perm.length === SLOTS) {
+        let p = 1, u = 0;
+        for (const i of perm) { p *= GROUPS[i].w / (1 - u); u += GROUPS[i].w; }
+        const k = perm.slice().sort((a, b) => a - b).join(",");
+        m.set(k, (m.get(k) || 0) + p);
+        return;
+      }
+      for (let i = 0; i < n; i++) { if (used[i]) continue; used[i] = 1; perm.push(i); rec(); perm.pop(); used[i] = 0; }
+    })();
+    for (const [k, p] of m) out.push([k.split(",").map(Number), p]);
+    return out;
+  }
+
+  function groupDist(gi, scores) {
+    const d = new Map(), p = 1 / GROUPS[gi].opts.length;
+    for (let oi = 0; oi < GROUPS[gi].opts.length; oi++) {
+      const s = q(scores[gi][oi]);
+      d.set(s, (d.get(s) || 0) + p);
+    }
+    return [...d];
+  }
+
+  /** 某个档位（opts 下标）在组内的达标率：档位 ≥ 它的比例 */
+  function levelRate(gi, oi) {
+    const opts = GROUPS[gi].opts;
+    const v = opts[Math.max(0, Math.min(oi | 0, opts.length - 1))];
+    let k = 0;
+    for (const x of opts) if (x >= v - 1e-9) k++;
+    return k / opts.length;
+  }
+
+  const _spCache = new Map();
+  function setProbsCached(scheme) {
+    if (!_spCache.has(scheme)) _spCache.set(scheme, setProbs(scheme));
+    return _spCache.get(scheme);
+  }
+
+  /**
+   * 组合命中概率。picks = [{ gi, oi }]，oi = opts 的下标（档位升序）。
+   *  - 选 ≤4 个：要求这些词条全部出现（4 条里要凑齐它们），各自档位 ≥ 最低档
+   *  - 选 >4 个：把它们当候选池，4 条词条全落在池子里即算命中（= 命中其中任意 4 个），各自档位 ≥ 最低档
+   * 返回 { p, pIncl, f, n, k, mode }：pIncl = 结构概率，f = 条件于结构时的档位达标率
+   */
+  function comboProb(picks, scheme = "sequential") {
+    const list = (picks || []).filter((c) => c && GROUPS[c.gi]);
+    if (!list.length) return { p: 1, pIncl: 1, f: 1, n: 0, k: 0, mode: "none" };
+    const uniq = new Map();
+    for (const c of list) uniq.set(c.gi, c.oi);       // 同组重复只算一次
+    const want = [...uniq.keys()];
+    const n = want.length;
+    const rate = (gi) => levelRate(gi, uniq.get(gi));
+    const probs = setProbsCached(scheme);
+
+    if (n <= SLOTS) {                                  // 全中
+      let f = 1;
+      for (const gi of want) f *= rate(gi);
+      let pIncl = 0;
+      for (const [set, sp] of probs) {
+        let ok = true;
+        for (const gi of want) if (!set.includes(gi)) { ok = false; break; }
+        if (ok) pIncl += sp;
+      }
+      return { p: f * pIncl, pIncl, f, n, k: n, mode: "all" };
+    }
+
+    const pool = new Set(want);                        // 池子：4 条全在池里
+    let p = 0, pIncl = 0;
+    for (const [set, sp] of probs) {
+      let f = 1, ok = true;
+      for (const gi of set) {
+        if (!pool.has(gi)) { ok = false; break; }
+        f *= rate(gi);
+      }
+      if (ok) { pIncl += sp; p += sp * f; }
+    }
+    return { p, pIncl, f: pIncl > 0 ? p / pIncl : 0, n, k: SLOTS, mode: "any4" };
+  }
+
+  /** 按当前抽取方式抽「4 个效果组」的采样器：u∈[0,1) → 组下标数组 */
+  function makeSetSampler(scheme) {
+    const list = setProbsCached(scheme);
+    const cum = new Float64Array(list.length);
+    let acc = 0;
+    for (let i = 0; i < list.length; i++) { acc += list[i][1]; cum[i] = acc; }
+    const last = list.length - 1;
+    return (u) => {
+      const t = u * acc;
+      let lo = 0, hi = last;
+      while (lo < hi) { const mid = (lo + hi) >> 1; if (cum[mid] < t) lo = mid + 1; else hi = mid; }
+      return list[lo][0];
+    };
+  }
+
+  /** 单次结果（lines = [{gi, oi}]）是否满足组合条件，口径与 comboProb 一致 */
+  function comboHit(lines, picks) {
+    const uniq = new Map();
+    for (const c of picks || []) if (c && GROUPS[c.gi]) uniq.set(c.gi, c.oi);
+    if (!uniq.size) return false;
+    const got = new Map();
+    for (const l of lines) got.set(l.gi, l.oi);
+    if (uniq.size <= SLOTS) {
+      for (const [gi, oi] of uniq) { const v = got.get(gi); if (v === undefined || v < oi) return false; }
+      return true;
+    }
+    for (const [gi, oi] of got) { const need = uniq.get(gi); if (need === undefined || oi < need) return false; }
+    return true;
+  }
+
+  /** 精确分布：返回 [[整数网格分, 概率], ...]，按分数升序 */
+  function totalDist(scores, scheme = "sequential") {
+    const per = GROUPS.map((_, gi) => groupDist(gi, scores));
+    const out = new Map();
+    for (const [set, sp] of setProbs(scheme)) {
+      let cur = [[0, 1]];
+      for (const gi of set) {
+        const nx = new Map();
+        for (const [a, pa] of cur) for (const [b, pb] of per[gi]) {
+          const s = a + b;
+          nx.set(s, (nx.get(s) || 0) + pa * pb);
+        }
+        cur = [...nx];
+      }
+      for (const [s, p] of cur) out.set(s, (out.get(s) || 0) + sp * p);
+    }
+    return [...out].sort((a, b) => a[0] - b[0]);
+  }
+
+  const geq = (dist, m) => { const t = q(m); let a = 0; for (const [s, p] of dist) if (s >= t) a += p; return a; };
+  const leq = (dist, m) => { const t = q(m); let a = 0; for (const [s, p] of dist) if (s <= t) a += p; return a; };
+
+  function stats(dist) {
+    let mean = 0, mass = 0;
+    for (const [s, p] of dist) { mean += toScore(s) * p; mass += p; }
+    let v = 0;
+    for (const [s, p] of dist) v += (toScore(s) - mean) ** 2 * p;
+    let acc = 0, med = dist[0][0];
+    for (const [s, p] of dist) { acc += p; if (acc >= 0.5) { med = s; break; } }
+    let mode = dist[0][0], best = -1;
+    for (const [s, p] of dist) if (p > best) { best = p; mode = s; }
+    return { mean, sd: Math.sqrt(v), median: toScore(med), mode: toScore(mode), mass,
+             lo: toScore(dist[0][0]), hi: toScore(dist[dist.length - 1][0]) };
+  }
+
+  /** 按宽度 w（分）分箱，返回 [{lo,hi,p,cum}]（cum = P(总分 ≥ lo)） */
+  function histogram(dist, w) {
+    const binU = Math.max(1, Math.round(w * Q));
+    const lo = dist[0][0], hi = dist[dist.length - 1][0];
+    // 箱数向上取整；最后一箱右界截到真实最高分，否则会多出半个空箱、柱子画到坐标区外
+    const nb = Math.max(1, Math.ceil((hi - lo) / binU));
+    const bins = Array.from({ length: nb }, (_, i) => ({
+      lo: lo + i * binU, hi: Math.min(lo + (i + 1) * binU, hi), p: 0, cum: 0,
+    }));
+    for (const [s, p] of dist) bins[Math.min(nb - 1, Math.floor((s - lo) / binU))].p += p;
+    let acc = 0;
+    for (let i = nb - 1; i >= 0; i--) { acc += bins[i].p; bins[i].cum = acc; }
+    return bins.map((b) => ({ lo: toScore(b.lo), hi: toScore(b.hi), p: b.p, cum: b.cum }));
+  }
+
+  const TIERS = [
+    { name: "大業績", range: "≥30 分",   lo: 30,  hi: Infinity },
+    { name: "畢業",   range: "25~29 分", lo: 25,  hi: 30 },
+    { name: "小畢業", range: "22~24 分", lo: 22,  hi: 25 },
+    { name: "暫用",   range: "19~21 分", lo: 19,  hi: 22 },
+    { name: "滾",     range: "≤18 分",   lo: -Infinity, hi: 19 },
+  ];
+  const tierProbs = (dist) => TIERS.map((t) => ({
+    ...t, p: geq(dist, t.lo) - (t.hi === Infinity ? 0 : geq(dist, t.hi)),
+  }));
+
+  /** 至少一次成功所需次数：期望 / 中位 / 任意把握分位 */
+  function rolls(p, conf) {
+    if (!(p > 0)) return Infinity;
+    if (p >= 1) return 1;
+    return Math.ceil(Math.log(1 - conf) / Math.log1p(-p));
+  }
+  const expectedRolls = (p) => (p >= 1 ? 1 : p > 0 ? 1 / p : Infinity);
+
+  /** 分数表结构校验：20 组 × 各自档位数，且每格都是有限数 */
+  function validScores(s) {
+    if (!Array.isArray(s) || s.length !== GROUPS.length) return false;
+    for (let gi = 0; gi < GROUPS.length; gi++) {
+      const row = s[gi];
+      if (!Array.isArray(row) || row.length !== GROUPS[gi].opts.length) return false;
+      for (const v of row) if (typeof v !== "number" || !isFinite(v)) return false;
+    }
+    return true;
+  }
+
+  return { GROUPS, ENHANCED, T2, TOY, SLOTS, Q, TIERS, validScores, levelRate, comboProb,
+           makeSetSampler, comboHit,
+           presetScores, totalDist, stats, geq, leq, histogram, tierProbs, rolls, expectedRolls, toScore };
+})();
+if (typeof globalThis !== "undefined") globalThis.CORE = CORE;
+</script>
+
+<!-- ==================================================================
+     界面逻辑
+     ================================================================== -->
+<script>
+(() => {
+  const $ = (id) => document.getElementById(id);
+  const KEY = "elsword.scoreDist.v2";
+  const DEFAULTS = { kind: "figure2", scheme: "sequential", m: 22, n: 100, bin: 0.5 };
+
+  const S = { ...DEFAULTS, scores: CORE.presetScores("figure2"), combo: [] };
+  const normCombo = (raw) => {
+    const out = [], seen = new Set();
+    for (const c of Array.isArray(raw) ? raw : []) {
+      const gi = +c.gi, oi = +c.oi;
+      if (!Number.isInteger(gi) || !Number.isInteger(oi) || !CORE.GROUPS[gi]) continue;
+      if (seen.has(gi) || oi < 0 || oi >= CORE.GROUPS[gi].opts.length) continue;
+      seen.add(gi); out.push({ gi, oi });
+    }
+    return out;
+  };
+  let dist = null, lastRun = 0, timer = null, dirty = false;
+
+  // ---------------- 存取 ----------------
+  function load() {
+    try {
+      const raw = localStorage.getItem(KEY);
+      if (!raw) return;
+      const o = JSON.parse(raw);
+      if (o.scores !== undefined) {
+        if (CORE.validScores(o.scores)) S.scores = o.scores;
+        else console.warn("存档里的分数表结构不对（要 20 组 × 8 档），已忽略，用默认表");
+      }
+      for (const k of ["kind", "scheme", "bin"]) if (o[k] !== undefined) S[k] = o[k];
+      for (const k of ["m", "n"]) if (typeof o[k] === "number") S[k] = o[k];
+      if (Array.isArray(o.combo)) S.combo = normCombo(o.combo);
+    } catch (e) { console.warn("读取本地存档失败", e); }
+  }
+  let saveTimer = null;
+  function save() {
+    clearTimeout(saveTimer);
+    saveTimer = setTimeout(() => {
+      try {
+        localStorage.setItem(KEY, JSON.stringify({
+          kind: S.kind, scheme: S.scheme, m: S.m, n: S.n, bin: S.bin, scores: S.scores, combo: S.combo,
+        }));
+        const t = new Date().toLocaleTimeString("zh-CN", { hour12: false });
+        $("saved").textContent = "已自动保存 " + t;
+      } catch (e) { $("saved").textContent = "保存失败：" + e.message; }
+    }, 200);
+  }
+
+  // ---------------- 数字格式 ----------------
+  const pct = (p) => {
+    if (p <= 0) return "0%";
+    const x = p * 100;
+    if (x >= 1) return x.toFixed(3) + "%";
+    if (x >= 0.01) return x.toFixed(4) + "%";
+    if (x >= 0.0001) return x.toFixed(6) + "%";
+    if (x >= 1e-6) return x.toFixed(8) + "%";
+    return x.toExponential(3) + "%";
+  };
+  const num = (x, d = 1) => (!isFinite(x) ? "∞" : x.toLocaleString("zh-CN", { maximumFractionDigits: d }));
+  const sc = (x) => (Math.round(x * 1000) / 1000).toString();
+
+  // ---------------- 计算 ----------------
+  function recompute(reason) {
+    clearTimeout(timer);
+    $("saved").textContent = "计算中…";
+    timer = setTimeout(() => {
+      const t0 = performance.now();
+      dist = CORE.totalDist(S.scores, S.scheme);
+      lastRun = performance.now() - t0;
+      renderAll();
+      save();
+    }, 120);
+  }
+
+  // ---------------- 指标 ----------------
+  function renderAll() {
+    const st = CORE.stats(dist);
+    const m = S.m, n = Math.max(1, Math.round(S.n));
+    const p = CORE.geq(dist, m);
+    const exp = CORE.expectedRolls(p);
+    const med = CORE.rolls(p, 0.5), c90 = CORE.rolls(p, 0.9), c99 = CORE.rolls(p, 0.99);
+    const pN = p >= 1 ? 1 : 1 - Math.pow(1 - p, n);
+
+    $("kpiTarget").innerHTML = [
+      ["单次洗练 P(总分 ≥ " + sc(m) + ")", pct(p), "分数最高 " + sc(st.hi) + " 分", "hl"],
+      ["数学期望需要洗练", num(exp), "次（几何分布的期望 1/p）", "hl"],
+      ["中位次数（50% 把握）", num(med), "次", ""],
+      ["90% / 99% 把握", num(c90) + " / " + num(c99), "次", ""],
+      ["洗练 " + n + " 次，至少出一次 ≥ " + sc(m), pct(pN), "一次都没出：" + pct(1 - pN), "hl2"],
+    ].map(([k, v, x, cls]) =>
+      `<div class="kpi ${cls}"><div class="k">${k}</div><div class="v">${v}</div><div class="x">${x}</div></div>`).join("");
+
+    $("mNote").innerHTML = p <= 0
+      ? `当前分数表下总分最高只有 <b>${sc(st.hi)}</b> 分，达不到 ${sc(m)} 分，所以概率为 0。`
+      : `每次洗练出 ≥${sc(m)} 分的概率 p = <b>${pct(p)}</b>（≈ 1 / ${num(1 / p, 0)}），
+         平均 <b>${num(exp)}</b> 次能出一次；洗 ${n} 次至少出一次的概率 = 1−(1−p)^${n} = <b>${pct(pN)}</b>。`;
+
+    $("kpiAll").innerHTML = [
+      ["期望总分", st.mean.toFixed(4), "单条词条平均 " + (st.mean / CORE.SLOTS).toFixed(3) + " 分"],
+      ["标准差", st.sd.toFixed(4), ""],
+      ["中位数 / 众数", st.median + " / " + st.mode, ""],
+      ["可能范围", sc(st.lo) + " ~ " + sc(st.hi), "共 " + dist.length + " 个可能分数"],
+      ["抽取方式", { sequential: "顺序加权不放回", product: "独立抽·重复整次重抽", uniform: "等概率取 4 组" }[S.scheme],
+       "计算耗时 " + lastRun.toFixed(0) + " ms"],
+    ].map(([k, v, x]) =>
+      `<div class="kpi"><div class="k">${k}</div><div class="v">${v}</div><div class="x">${x}</div></div>`).join("");
+
+    $("tierTable").querySelector("tbody").innerHTML = CORE.tierProbs(dist).map((t) => {
+      const e = CORE.expectedRolls(t.p);
+      return `<tr><td><b>${t.name}</b></td><td>${t.range}</td><td>${pct(t.p)}</td><td>${num(e)}</td>
+              <td>${num(CORE.rolls(t.p, 0.5))}</td><td>${num(CORE.rolls(t.p, 0.9))}</td>
+              <td>${num(CORE.rolls(t.p, 0.99))}</td></tr>`;
+    }).join("");
+
+    // N 次洗练
+    const ns = [1, 5, 10, 25, 50, 100, 200, 500, 1000, 2000, 5000, 10000];
+    if (!ns.includes(n)) { ns.push(n); ns.sort((a, b) => a - b); }
+    $("nTable").querySelector("tbody").innerHTML = ns.map((k) => {
+      const q = p >= 1 ? 1 : 1 - Math.pow(1 - p, k);
+      const mark = k === n ? ' style="background:rgba(70,213,239,.10);font-weight:650"' : "";
+      return `<tr${mark}><td>${k.toLocaleString("zh-CN")}</td><td>${pct(q)}</td><td>${pct(1 - q)}</td></tr>`;
+    }).join("");
+
+    $("confTable").querySelector("tbody").innerHTML = [[0.5, "一半人中奖"], [0.9, "十拿九稳"], [0.99, "基本跑不掉"]]
+      .map(([c, txt]) => `<tr><td>${(c * 100).toFixed(0)}%</td><td>${num(CORE.rolls(p, c))} 次</td><td>${txt}</td></tr>`).join("");
+
+    renderChart(st, m);
+    renderDetail();
+    renderCombo();
+    renderSimNote();
+    renderSimStats();
+  }
+
+  // ---------------- 图 ----------------
+  function renderChart(st, m) {
+    const W = 1000, H = 440, L = 66, R = 66, T = 22, B = 52;
+    const pw = W - L - R, ph = H - T - B;
+    const bins = CORE.histogram(dist, S.bin);
+    // 退化分布（所有分数相同）时给个伪跨度，否则 (hi-lo)=0 会把所有点压到左边界
+    const pad = Math.max(0.5, S.bin);
+    const dlo = st.hi > st.lo ? st.lo : st.lo - pad;
+    const dhi = st.hi > st.lo ? st.hi : st.hi + pad;
+    const x = (v) => L + ((v - dlo) / (dhi - dlo)) * pw;
+    const maxP = Math.max(...bins.map((b) => b.p)) || 1;
+    const yP = (p) => T + ph - (p / maxP) * ph;
+    const yC = (p) => T + ph - p * ph;
+    const bw = bins.length === 1 ? pw * 0.18 : Math.max(1, (pw / bins.length) * 0.82);
+
+    let s = "";
+    // 横网格 + 左轴(%) + 右轴(累计%)
+    for (let i = 0; i <= 5; i++) {
+      const f = i / 5, y = T + ph - f * ph;
+      s += `<line x1="${L}" y1="${y.toFixed(1)}" x2="${L + pw}" y2="${y.toFixed(1)}" stroke="rgba(255,255,255,.055)"/>`;
+      const lab = maxP * f * 100;
+      s += `<text x="${L - 8}" y="${(y + 4).toFixed(1)}" font-size="11" text-anchor="end" fill="#7d879b">${(lab >= 10 ? lab.toFixed(1) : lab.toFixed(2))}%</text>`;
+      s += `<text x="${L + pw + 8}" y="${(y + 4).toFixed(1)}" font-size="11" fill="#f0c46a">${(f * 100).toFixed(0)}%</text>`;
+    }
+    // 柱
+    bins.forEach((b, i) => {
+      const x0 = x(b.lo), x1 = x(b.hi);
+      const cx = (x0 + x1) / 2;
+      const wBar = Math.max(1, Math.min(bw, x1 - x0 || bw));   // 最后一箱被截短时按实际宽度画
+      const y = yP(b.p), h = T + ph - y;
+      const slot = pw / bins.length;                         // 整列命中区：柱子很矮甚至为 0 也能 hover
+      const hx = Math.max(L, cx - slot / 2), hw = Math.max(1, Math.min(L + pw, cx + slot / 2) - hx);
+      s += `<g data-rng="${sc(b.lo)} ~ ${sc(b.hi)}" data-lo="${sc(b.lo)}" data-p="${pct(b.p)}" data-cum="${pct(b.cum)}">`
+         + `<rect class="bar" x="${(cx - wBar / 2).toFixed(1)}" y="${y.toFixed(1)}" width="${wBar.toFixed(1)}" height="${Math.max(0, h).toFixed(1)}" fill="rgba(70,213,239,.55)" stroke="rgba(70,213,239,.85)" stroke-width="0.6"/>`
+         + `<rect class="hit" x="${hx.toFixed(1)}" y="${T}" width="${hw.toFixed(1)}" height="${ph}" fill="transparent" pointer-events="all"/>`
+         + `</g>`;
+    });
+    // 累计曲线
+    const pts = bins.map((b) => `${x(b.lo).toFixed(1)},${yC(b.cum).toFixed(1)}`).join(" ");
+    s += `<polyline points="${pts}" fill="none" stroke="#f0c46a" stroke-width="2"/>`;
+    // 档位线
+    for (const [v, c] of [[19, "#8d97a9"], [22, "#3ddc97"], [25, "#a78bfa"], [30, "#ff9d9d"]]) {
+      if (v < st.lo || v > st.hi) continue;
+      s += `<line x1="${x(v).toFixed(1)}" y1="${T}" x2="${x(v).toFixed(1)}" y2="${T + ph}" stroke="${c}" stroke-dasharray="3 4" opacity="0.55"/>`;
+      s += `<text x="${x(v).toFixed(1)}" y="${T - 6}" font-size="10.5" text-anchor="middle" fill="${c}">${v}</text>`;
+    }
+    // 目标 M
+    if (m >= st.lo && m <= st.hi) {
+      s += `<line x1="${x(m).toFixed(1)}" y1="${T}" x2="${x(m).toFixed(1)}" y2="${T + ph}" stroke="#e9edf6" stroke-width="1.4" stroke-dasharray="6 4" opacity=".8"/>`;
+      s += `<text x="${x(m).toFixed(1)}" y="${T + ph + 16}" font-size="11" text-anchor="middle" fill="#e9edf6">目标 ${sc(m)} 分</text>`;
+    }
+    // 坐标轴
+    s += `<line x1="${L}" y1="${T + ph}" x2="${L + pw}" y2="${T + ph}" stroke="rgba(255,255,255,.22)"/>`;
+    const step = (st.hi - st.lo) > 24 ? 4 : (st.hi - st.lo) > 10 ? 2 : 1;
+    for (let v = Math.ceil(st.lo); v <= st.hi; v += step) {
+      s += `<line x1="${x(v).toFixed(1)}" y1="${T + ph}" x2="${x(v).toFixed(1)}" y2="${T + ph + 5}" stroke="rgba(255,255,255,.22)"/>`;
+      s += `<text x="${x(v).toFixed(1)}" y="${T + ph + 20}" font-size="11" text-anchor="middle" fill="#9aa5b8">${v}</text>`;
+    }
+    s += `<text x="${L + pw / 2}" y="${H - 12}" font-size="12.5" text-anchor="middle" fill="#9aa5b8">4 条词条得分总和</text>`;
+    s += `<text x="${L + 6}" y="${T + 12}" font-size="11" fill="#46d5ef">青柱 = 该分数区间的概率（左轴）</text>`;
+    s += `<text x="${L + 6}" y="${T + 27}" font-size="11" fill="#f0c46a">金线 = P(总分 ≥ x)（右轴）</text>`;
+    $("chart").innerHTML = s;
+    hideTip();
+  }
+
+  // ---------------- 悬停浮层 ----------------
+  const tipEl = $("tip");
+  function hideTip() { tipEl.style.display = "none"; }
+  function showTip(g, e) {
+    const d = g.dataset;
+    tipEl.innerHTML = `<div class="t-range">${d.rng} 分</div>`
+                    + `<div class="t-p">${d.p}</div>`
+                    + `<div class="t-cum">累计 P(总分 ≥ ${d.lo}) = ${d.cum}</div>`;
+    tipEl.style.display = "block";
+    const wrap = $("chart").parentElement || document.body, wr = wrap.getBoundingClientRect();
+    const tw = tipEl.offsetWidth, th = tipEl.offsetHeight;
+    const x = Math.min(Math.max(e.clientX - wr.left, tw / 2 + 2), Math.max(tw / 2 + 2, wr.width - tw / 2 - 2));
+    const y = e.clientY - wr.top;
+    const above = y - th - 14 >= 0;
+    tipEl.style.left = x + "px";
+    tipEl.style.top = y + "px";
+    tipEl.style.transform = above ? "translate(-50%,-100%) translateY(-12px)" : "translate(-50%,0) translateY(14px)";
+  }
+  $("chart").addEventListener("mousemove", (e) => {
+    const g = e.target && e.target.closest ? e.target.closest("g[data-p]") : null;
+    if (g) showTip(g, e); else hideTip();
+  });
+  $("chart").addEventListener("mouseleave", hideTip);
+
+  function renderDetail() {
+    const bins = CORE.histogram(dist, S.bin);
+    $("detail").querySelector("tbody").innerHTML = bins.map((b) =>
+      `<tr><td>${sc(b.lo)} ~ ${sc(b.hi)}</td><td>${pct(b.p)}</td><td>${pct(b.cum)}</td></tr>`).join("");
+  }
+
+  // ---------------- 组合保底 ----------------
+  const lvName = (gi, v) => (CORE.ENHANCED.has(gi) ? "Lv×" + v : v + "%");
+
+  function buildCombo() {
+    const cur = new Map(S.combo.map((c) => [c.gi, c.oi]));
+    $("comboPicker").innerHTML = CORE.GROUPS.map((g, gi) => {
+      const on = cur.has(gi), oi = on ? cur.get(gi) : 0;
+      const sel = g.opts.map((v, j) =>
+        `<option value="${j}"${j === oi ? " selected" : ""}>${lvName(gi, v)}</option>`).join("");
+      const rate = on ? Math.round(100 * CORE.levelRate(gi, oi)) + "%" : "";
+      return `<label class="crow${on ? " on" : ""}">`
+           + `<input type="checkbox" data-gi="${gi}"${on ? " checked" : ""}>`
+           + `<span class="cname" title="${g.name}">${g.name}</span>`
+           + `<select data-gi="${gi}"${on ? "" : " disabled"}>${sel}</select>`
+           + `<span class="cf">${rate}</span></label>`;
+    }).join("");
+  }
+
+  $("comboPicker").addEventListener("change", (e) => {
+    const el = e.target, gi = +el.dataset.gi;
+    if (!CORE.GROUPS[gi] && gi !== 0) return;
+    if (el.type === "checkbox") {
+      if (el.checked) { if (!S.combo.some((c) => c.gi === gi)) S.combo.push({ gi, oi: 0 }); }
+      else S.combo = S.combo.filter((c) => c.gi !== gi);
+    } else {
+      const c = S.combo.find((c) => c.gi === gi);
+      if (c) c.oi = +el.value;
+    }
+    S.combo = normCombo(S.combo);
+    buildCombo(); renderAll(); save();
+  });
+  $("btnComboClear").addEventListener("click", () => {
+    S.combo = []; buildCombo(); renderAll(); save();
+  });
+
+  function renderCombo() {
+    const box = $("kpiCombo"), hint = $("comboHint");
+    const picks = S.combo;
+    if (!picks.length) {
+      hint.textContent = "还没选词条";
+      box.innerHTML = `<div class="muted" style="grid-column:1/-1">勾选上面的词条（最多 4 个），这里会给出单次命中概率和要洗多少次</div>`;
+      const dash = `<tr><td colspan="3" class="muted" style="text-align:center">—</td></tr>`;
+      $("comboTable").querySelector("tbody").innerHTML = dash;
+      $("comboConf").querySelector("tbody").innerHTML = dash;
+      return;
+    }
+    const r = CORE.comboProb(picks, S.scheme);
+    const p = r.p, k = picks.length;
+    hint.innerHTML = `已选 <b>${k}</b> 个词条`
+      + (k > CORE.SLOTS
+        ? `　<span class="warn">按池子算：4 条全在池里即算命中（其中任意 ${CORE.SLOTS} 个）</span>`
+        : "");
+    box.innerHTML = [
+      ["单次洗练命中该组合", pct(p),
+       k > CORE.SLOTS ? `选中 ${k} 个 · 取其中 ${CORE.SLOTS} 个` : `选中 ${k} 个词条`, "hl"],
+      ["数学期望需要洗练", num(CORE.expectedRolls(p)), "次（几何分布 1/p）", "hl"],
+      ["中位次数（50% 把握）", num(CORE.rolls(p, 0.5)), "次", ""],
+      ["90% / 99% 把握", num(CORE.rolls(p, 0.9)) + " / " + num(CORE.rolls(p, 0.99)), "次", ""],
+      ["拆解", pct(r.pIncl) + " × " + pct(r.f),
+       r.mode === "any4" ? "4 条全在池里 × 档位达标率" : "出全这些词条 × 档位达标率", "hl2"],
+    ].map(([a, b, c, cls]) =>
+      `<div class="kpi ${cls}"><div class="k">${a}</div><div class="v">${b}</div><div class="x">${c}</div></div>`).join("");
+
+    const extra = [CORE.rolls(p, 0.5), CORE.rolls(p, 0.9), CORE.rolls(p, 0.99)]
+      .filter((v) => isFinite(v) && v <= 1000000);
+    const ns = [...new Set([1, 2, 5, 10, 25, 50, 100, 200, 500, 1000, 2000, 5000, 10000, ...extra])]
+      .filter((v) => v >= 1).sort((a, b) => a - b);
+    $("comboTable").querySelector("tbody").innerHTML = ns.map((n) => {
+      const at = p >= 1 ? (n === 1 ? 1 : 0) : Math.pow(1 - p, n - 1) * p;
+      const within = p >= 1 ? 1 : 1 - Math.pow(1 - p, n);
+      return `<tr><td>${n.toLocaleString("zh-CN")}</td><td>${pct(at)}</td><td>${pct(within)}</td></tr>`;
+    }).join("");
+
+    $("comboConf").querySelector("tbody").innerHTML =
+      [[0.5, "一半人中奖"], [0.8, "八成把握"], [0.9, "十拿九稳"], [0.95, "稳了"],
+       [0.99, "基本跑不掉"], [0.999, "几乎必出"]]
+        .map(([c, t]) => `<tr><td>${(c * 100).toFixed(c >= 0.999 ? 1 : 0)}%</td><td>${num(CORE.rolls(p, c))} 次</td><td>${t}</td></tr>`).join("");
+  }
+
+  // ---------------- 编辑器 ----------------
+  function buildEditor() {
+    $("editor").innerHTML = CORE.GROUPS.map((g, gi) => {
+      const zero = g.table === null;
+      const cells = g.opts.map((v, oi) => `
+        <div class="cell">
+          <span>${CORE.ENHANCED.has(gi) ? "[Lv×" + v + "]" : v + "%"}</span>
+          <input type="number" step="0.5" data-gi="${gi}" data-oi="${oi}"
+                 value="${S.scores[gi][oi]}" title="${g.name} · 档位 ${v}">
+        </div>`).join("");
+      return `<div class="grow">
+        <div class="gname">${g.name}
+          <span class="gw">出现概率 ${(g.w * 100).toFixed(1)}%${zero ? ' · <span class="gzero">图2 无评分列（默认 0 分）</span>' : ""}</span>
+        </div>
+        <div class="cells">${cells}</div>
+      </div>`;
+    }).join("");
+  }
+
+  $("editor").addEventListener("input", (e) => {
+    const el = e.target;
+    if (el.tagName !== "INPUT") return;
+    const gi = +el.dataset.gi, oi = +el.dataset.oi;
+    const v = el.value.trim() === "" ? 0 : parseFloat(el.value);
+    S.scores[gi][oi] = isFinite(v) ? v : 0;
+    markCustom();
+    recompute("edit");
+  });
+  // 编辑后把预设标记成「自定义」，但保留原来的名字便于对照
+  function markCustom() {
+    if (S.kind !== "custom") {
+      S.kind = "custom";
+      const sel = $("preset");
+      sel.options[2].hidden = false;
+      sel.options[2].textContent = "自定义（已手动修改）";
+      sel.value = "custom";
+    }
+  }
+
+  // ---------------- 预设 / 重置 ----------------
+  $("preset").addEventListener("change", (e) => {
+    const k = e.target.value;
+    if (k === "custom") return;
+    S.kind = k;
+    S.scores = CORE.presetScores(k);
+    buildEditor();
+    recompute("preset");
+  });
+
+  $("btnReset").addEventListener("click", () => {
+    if (dirty && !confirm("会覆盖当前分数表（建议先「导出 JSON」备份），继续？")) return;
+    Object.assign(S, DEFAULTS);
+    S.scores = CORE.presetScores("figure2");
+    S.combo = [];
+    dirty = false;
+    $("preset").options[2].hidden = true;
+    $("preset").value = "figure2";
+    syncInputs();
+    buildEditor();
+    recompute("reset");
+  });
+
+  // ---------------- 导入导出 ----------------
+  $("btnExport").addEventListener("click", () => {
+    const blob = new Blob([JSON.stringify({ app: "elsword-score-dist", version: 1, ...S }, null, 2)],
+                          { type: "application/json" });
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(blob);
+    a.download = "死龙洗练分数表.json";
+    a.click();
+    URL.revokeObjectURL(a.href);
+  });
+  $("btnImport").addEventListener("click", () => $("file").click());
+  $("file").addEventListener("change", (e) => {
+    const f = e.target.files[0];
+    if (!f) return;
+    const fr = new FileReader();
+    fr.onload = () => {
+      try {
+        const o = JSON.parse(fr.result);
+        if (!CORE.validScores(o.scores))
+          throw new Error("分数表结构不对：需要 20 组、每组 8 档，且每一格都是数字");
+        Object.assign(S, { kind: o.kind || "custom", scheme: o.scheme || S.scheme, m: o.m ?? S.m,
+                           n: o.n ?? S.n, bin: o.bin ?? S.bin, scores: o.scores,
+                           combo: normCombo(o.combo ?? S.combo) });
+        if (S.kind !== "figure2" && S.kind !== "toy") markCustom();
+        syncInputs(); buildCombo(); buildEditor(); recompute("import");
+      } catch (err) { alert("导入失败：" + err.message); }
+    };
+    fr.readAsText(f);
+    e.target.value = "";
+  });
+
+  $("btnCsv").addEventListener("click", () => {
+    const rows = [["分数下界", "分数上界", "该区间概率", "累计概率(>=下界)"]];
+    for (const b of CORE.histogram(dist, S.bin)) rows.push([b.lo, b.hi, b.p, b.cum]);
+    const csv = "\uFEFF" + rows.map((r) => r.map((x) => (typeof x === "number" ? x.toPrecision(10) : x)).join(",")).join("\n");
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(new Blob([csv], { type: "text/csv" }));
+    a.download = "死龙洗练分数分布.csv";
+    a.click();
+    URL.revokeObjectURL(a.href);
+  });
+
+  // ---------------- 输入同步 ----------------
+  function syncInputs() {
+    if (S.kind === "custom") {
+      const sel = $("preset");
+      sel.options[2].hidden = false;
+      sel.options[2].textContent = "自定义（当前分数表）";
+    }
+    $("preset").value = S.kind === "custom" ? "custom" : S.kind;
+    $("scheme").value = S.scheme;
+    $("target").value = S.m;
+    $("rolls").value = S.n;
+    $("bin").value = String(S.bin);
+  }
+  $("scheme").addEventListener("change", (e) => { S.scheme = e.target.value; recompute("scheme"); });
+  $("target").addEventListener("input", (e) => {
+    const v = parseFloat(e.target.value);
+    if (isFinite(v)) { S.m = v; dirty = true; renderAll(); save(); }
+  });
+  $("rolls").addEventListener("input", (e) => {
+    const v = parseInt(e.target.value, 10);
+    if (isFinite(v) && v >= 1) { S.n = v; dirty = true; renderAll(); save(); }
+  });
+  $("bin").addEventListener("change", (e) => { S.bin = parseFloat(e.target.value); dirty = true; renderAll(); save(); });
+  for (const id of ["target", "rolls"]) $(id).addEventListener("input", () => { dirty = true; });
+
+  // ---------------- 洗练模拟 ----------------
+  const tierOf = (oi, n) => {
+    const lv = oi + 1;
+    if (lv >= n) return 3;                                  // 只有最高档是黄
+    const c1 = Math.max(1, Math.round(n * 0.25));
+    const c2 = Math.max(c1 + 1, Math.round(n * 0.5));
+    return lv <= c1 ? 0 : lv <= c2 ? 1 : 2;
+  };
+
+  const samplerCache = new Map();
+  function getSampler() {
+    if (!samplerCache.has(S.scheme)) samplerCache.set(S.scheme, CORE.makeSetSampler(S.scheme));
+    return samplerCache.get(S.scheme);
+  }
+
+  const SIM = { rolls: 0, sum: 0, best: -1, bestAt: 0, bestRoll: null, hits: 0, run: false, stop: false, last: null };
+  const rawOf = (set, oi) => ({ set: [...set], oi: [...oi] });
+  const goalMode = () => $("simGoal").value;
+
+  function buildRoll(set, oi4) {
+    const lines = set.map((gi, k) => {
+      const n = CORE.GROUPS[gi].opts.length;
+      return { gi, oi: oi4[k], n, v: CORE.GROUPS[gi].opts[oi4[k]], s: S.scores[gi][oi4[k]], t: tierOf(oi4[k], n) };
+    });
+    return { lines, total: lines.reduce((a, l) => a + l.s, 0) };
+  }
+  function randomRoll() {
+    const set = getSampler()(Math.random());
+    const oi = set.map((gi) => (Math.random() * CORE.GROUPS[gi].opts.length) | 0);
+    const r = buildRoll(set, oi);
+    r.raw = rawOf(set, oi);      // 留着，破了记录就能原样回放
+    return r;
+  }
+
+  function goalHit(r) {
+    const g = goalMode();
+    if (g === "none") return null;
+    if (g === "score") return r.total >= S.m;
+    return CORE.comboHit(r.lines, S.combo);
+  }
+
+  function renderSimRoll(r, meta) {
+    if (!r) return;
+    $("simLines").innerHTML = r.lines.map((l) =>
+      `<div class="sline t${l.t}">`
+      + `<span class="sname">${CORE.GROUPS[l.gi].name}</span>`
+      + `<span class="slv">${lvName(l.gi, l.v)}</span>`
+      + `<span class="sscore">${sc(l.s)}</span></div>`).join("");
+    $("simTotal").textContent = sc(r.total);
+    const v = $("simVerdict");
+    if (meta && meta.kind === "best") {
+      v.textContent = "历史最佳";
+      v.className = "tag verdict-ok";
+      $("simTotalNote").textContent = "第 " + num(meta.at, 0) + " 次洗练";
+      return;
+    }
+    const hit = goalHit(r);
+    if (hit === null) { v.textContent = "没设目标"; v.className = "tag"; $("simTotalNote").textContent = ""; }
+    else if (hit) { v.textContent = "达标 ✔"; v.className = "tag verdict-ok"; $("simTotalNote").textContent = "这一把就达标了"; }
+    else { v.textContent = "未达标"; v.className = "tag verdict-no"; $("simTotalNote").textContent = "这一把还没达标"; }
+  }
+
+  function renderSimStats() {
+    const avg = SIM.rolls ? SIM.sum / SIM.rolls : 0;
+    const st = dist ? CORE.stats(dist) : null;
+    const g = goalMode();
+    $("simStats").innerHTML = [
+      ["已洗次数", num(SIM.rolls, 0), "本次模拟累计", ""],
+      ["平均总分（模拟）", SIM.rolls ? avg.toFixed(3) : "—", st ? "理论 " + st.mean.toFixed(3) : "", ""],
+      ["最好总分", SIM.best < 0 ? "—" : sc(SIM.best),
+       SIM.bestAt ? "第 " + num(SIM.bestAt, 0) + " 次" + (SIM.bestRoll ? " · 点击查看" : "") : "",
+       SIM.bestRoll ? "click" : ""],
+      ["达标次数", g === "none" ? "—" : num(SIM.hits, 0), g === "none" ? "先选个目标" : "按当前目标统计", ""],
+    ].map(([k, v, x, cls]) =>
+      `<div class="kpi ${cls}"${cls === "click" ? ' data-best="1"' : ""}><div class="k">${k}</div><div class="v">${v}</div><div class="x">${x}</div></div>`).join("");
+  }
+
+  $("simStats").addEventListener("click", (e) => {
+    const card = e.target.closest && e.target.closest("[data-best]");
+    if (!card || !SIM.bestRoll) return;
+    renderSimRoll(buildRoll(SIM.bestRoll.set, SIM.bestRoll.oi), { kind: "best", at: SIM.bestAt });
+  });
+
+  function manualRolls(k) {
+    if (SIM.run) return;
+    let last = null, add = 0, best = SIM.best, bestAt = SIM.bestAt, hits = SIM.hits;
+    let bestRoll = SIM.bestRoll;
+    for (let i = 0; i < k; i++) {
+      last = randomRoll();
+      add += last.total;
+      const at = SIM.rolls + i + 1;
+      if (last.total > best) { best = last.total; bestAt = at; bestRoll = last.raw; }
+      if (goalHit(last)) hits++;
+    }
+    SIM.rolls += k; SIM.sum += add; SIM.best = best; SIM.bestAt = bestAt;
+    SIM.bestRoll = bestRoll; SIM.hits = hits; SIM.last = last;
+    renderSimRoll(last); renderSimStats();
+    $("simStatus").textContent = k > 1 ? `连洗 ${k} 次，上面显示最后一次` : "";
+  }
+
+  function simReset() {
+    if (SIM.run) return;
+    Object.assign(SIM, { rolls: 0, sum: 0, best: -1, bestAt: 0, bestRoll: null, hits: 0, last: null });
+    $("simLines").innerHTML = '<div class="muted">点「洗 1 次」开始</div>';
+    $("simTotal").textContent = "—";
+    $("simTotalNote").textContent = "";
+    $("simStatus").textContent = "";
+    const v = $("simVerdict"); v.textContent = "—"; v.className = "tag";
+    renderSimStats();
+  }
+
+  function autoStart() {
+    const g = goalMode();
+    if (g === "none" || SIM.run) return;
+    const picks = S.combo.map((c) => [c.gi, c.oi]);
+    if (g === "combo" && !picks.length) return;
+    const pool = new Int16Array(CORE.GROUPS.length).fill(-1);
+    for (const c of S.combo) pool[c.gi] = c.oi;
+    const poolMode = picks.length > CORE.SLOTS;
+    const M = S.m, scores = S.scores, sampler = getSampler();
+    const CAP = 2000000;
+    const base = SIM.rolls, baseSum = SIM.sum, baseHits = SIM.hits;
+    let n = 0, sum = 0, best = SIM.best, bestAt = SIM.bestAt, bestRoll = SIM.bestRoll;
+
+    SIM.run = true; SIM.stop = false;
+    $("simAuto").hidden = true; $("simStop").hidden = false;
+    $("simStatus").textContent = "自动洗练中…";
+
+    const finish = (roll, why) => {
+      SIM.run = false;
+      $("simAuto").hidden = false; $("simStop").hidden = true;
+      SIM.rolls = base + n; SIM.sum = baseSum + sum; SIM.best = best; SIM.bestAt = bestAt; SIM.bestRoll = bestRoll;
+      if (why === "hit") { SIM.hits = baseHits + 1; SIM.last = roll; renderSimRoll(roll); }
+      else SIM.hits = baseHits;
+      renderSimStats();
+      $("simStatus").innerHTML = why === "hit"
+        ? `自动洗了 <b>${num(n, 0)}</b> 次命中（累计第 ${num(base + n, 0)} 次）`
+        : why === "cap"
+          ? `洗满 ${num(CAP, 0)} 次还没出，这个目标的概率太低`
+          : `已停止（洗了 ${num(n, 0)} 次）`;
+    };
+
+    const frame = () => {
+      if (!SIM.run) return;
+      const t = performance.now();
+      while (performance.now() - t < 12) {
+        for (let k = 0; k < 500; k++) {
+          const set = sampler(Math.random());
+          const o0 = (Math.random() * 8) | 0, o1 = (Math.random() * 8) | 0,
+                o2 = (Math.random() * 8) | 0, o3 = (Math.random() * 8) | 0;
+          const total = scores[set[0]][o0] + scores[set[1]][o1] + scores[set[2]][o2] + scores[set[3]][o3];
+          n++; sum += total;
+          if (total > best) { best = total; bestAt = base + n; bestRoll = rawOf(set, [o0, o1, o2, o3]); }
+          let hit;
+          if (g === "score") hit = total >= M;
+          else if (poolMode) {
+            hit = pool[set[0]] >= 0 && o0 >= pool[set[0]] && pool[set[1]] >= 0 && o1 >= pool[set[1]]
+               && pool[set[2]] >= 0 && o2 >= pool[set[2]] && pool[set[3]] >= 0 && o3 >= pool[set[3]];
+          } else {
+            hit = true;
+            for (let p = 0; p < picks.length; p++) {
+              const gi = picks[p][0], oi = picks[p][1];
+              let got = -1;
+              if (set[0] === gi) got = o0; else if (set[1] === gi) got = o1;
+              else if (set[2] === gi) got = o2; else if (set[3] === gi) got = o3;
+              if (got < oi) { hit = false; break; }
+            }
+          }
+          if (hit) { finish(buildRoll(set, [o0, o1, o2, o3]), "hit"); return; }
+          if (n >= CAP) { finish(null, "cap"); return; }
+        }
+        if (SIM.stop) { finish(null, "stop"); return; }
+      }
+      $("simStatus").textContent = `自动洗练中… 已洗 ${num(n, 0)} 次，当前最好 ${sc(best)} 分`;
+      requestAnimationFrame(frame);
+    };
+    requestAnimationFrame(frame);
+  }
+
+  /** 目标面板：只在「选了组合」且「目标不是按分数」时挂在结果右边 */
+  function renderSimTargets() {
+    const g = goalMode();
+    const show = S.combo.length > 0 && g !== "score";
+    $("simMain").classList.toggle("solo", !show);
+
+    const pS = dist ? CORE.geq(dist, S.m) : 0;
+    $("simBoxScore").className = "tbox" + (g === "score" ? " on" : "");
+    $("simScoreMode").textContent = g === "score" ? "启用中" : "";
+    $("simScoreVal").textContent = sc(S.m) + " 分";
+    $("simScoreSub").innerHTML = pS > 0
+      ? `单次 <b>${pct(pS)}</b> · 平均 <b>${num(CORE.expectedRolls(pS))}</b> 次 · 中位 <b>${num(CORE.rolls(pS, 0.5))}</b> 次`
+      : `<span class="warn">当前分数表达不到这个分</span>`;
+
+    $("simBoxCombo").className = "tbox" + (g === "combo" ? " on" : "");
+    $("simComboMode").textContent = g === "combo" ? "启用中" : "";
+    const picks = S.combo;
+    if (!picks.length) {
+      $("simComboChips").innerHTML = `<span class="muted">还没选词条</span>`;
+      $("simComboSub").innerHTML = `去「洗练计算器 → 组合保底」勾选`;
+      return;
+    }
+    $("simComboChips").innerHTML = picks.map((c) => {
+      const grp = CORE.GROUPS[c.gi], v = grp.opts[c.oi];
+      const lv = CORE.ENHANCED.has(c.gi) ? "Lv≥" + v : "≥" + v + "%";
+      return `<span class="chip t${tierOf(c.oi, grp.opts.length)}">${grp.name}<em>${lv}</em></span>`;
+    }).join("");
+    const r = CORE.comboProb(picks, S.scheme);
+    const sem = picks.length > CORE.SLOTS
+      ? `池子 · 凑齐任意 ${CORE.SLOTS} 个`
+      : `全部都要出`;
+    $("simComboSub").innerHTML = `${picks.length} 个词条 · ${sem} · 单次 <b>${pct(r.p)}</b> · 平均 <b>${num(CORE.expectedRolls(r.p))}</b> 次`
+      + (r.p > 0 ? "" : `　<span class="warn">概率为 0</span>`);
+  }
+
+  function renderSimNote() {
+    const g = goalMode();
+    const bits = [
+      "抽取方式：" + ({ sequential: "顺序加权不放回", product: "独立抽·整次重抽", uniform: "等概率取 4 组" }[S.scheme] || S.scheme),
+      "分数表：" + (S.kind === "custom" ? "自定义" : S.kind === "toy" ? "小玩具 v1.2" : "图2 逐档"),
+    ];
+    let bad = g === "none";
+    if (g === "combo") {
+      if (!S.combo.length) { bits.push('<span class="warn">还没在「组合保底」里勾词条</span>'); bad = true; }
+      else if (!(CORE.comboProb(S.combo, S.scheme).p > 0)) { bits.push('<span class="warn">这个组合概率为 0</span>'); bad = true; }
+    } else if (g === "score") {
+      const pS = dist ? CORE.geq(dist, S.m) : 0;
+      bits.push(`分数目标：总分 ≥ <b>${sc(S.m)}</b> 分 · 单次 ${pct(pS)} · 平均 ${num(CORE.expectedRolls(pS))} 次`);
+      if (!(pS > 0)) { bits.push('<span class="warn">当前分数表达不到这个分</span>'); bad = true; }
+    }
+    $("simAuto").disabled = bad;
+    $("simNote").innerHTML = bits.join("　·　");
+    renderSimTargets();
+  }
+
+  function showPage(which) {
+    $("page-calc").hidden = which !== "calc";
+    $("page-sim").hidden = which !== "sim";
+    $("tabCalc").className = which === "calc" ? "on" : "";
+    $("tabSim").className = which === "sim" ? "on" : "";
+    if (which === "sim") { renderSimNote(); renderSimStats(); if (SIM.last) renderSimRoll(SIM.last); }
+  }
+  $("tabCalc").addEventListener("click", () => showPage("calc"));
+  $("tabSim").addEventListener("click", () => showPage("sim"));
+  $("btnComboSim").addEventListener("click", () => {
+    if (!S.combo.length) { $("comboHint").textContent = "先勾几个词条再来模拟"; return; }
+    $("simGoal").value = "combo";
+    showPage("sim");
+  });
+  $("simGoal").addEventListener("change", () => {
+    renderSimNote(); renderSimStats();
+    if (SIM.last) renderSimRoll(SIM.last);
+  });
+  $("simRoll1").addEventListener("click", () => manualRolls(1));
+  $("simRoll10").addEventListener("click", () => manualRolls(10));
+  $("simRoll100").addEventListener("click", () => manualRolls(100));
+  $("simReset").addEventListener("click", simReset);
+  $("simAuto").addEventListener("click", autoStart);
+  $("simStop").addEventListener("click", () => { SIM.stop = true; $("simStatus").textContent = "正在停止…"; });
+  if (location.hash === "#sim") showPage("sim");     // 可直接用 …/#sim 打开模拟页
+
+  // ---------------- 启动 ----------------
+  load();
+  syncInputs();
+  buildCombo();
+  buildEditor();
+  recompute("init");
+
+  // 自检：file:///...html?selftest=1 会在页面上打印核心算法校验值
+  if (location.search.includes("selftest")) {
+    const pre = document.createElement("pre");
+    pre.id = "selftest";
+    const out = [];
+    for (const kind of ["figure2", "toy"]) {
+      const d = CORE.totalDist(CORE.presetScores(kind), "sequential");
+      const st = CORE.stats(d);
+      out.push(`${kind}: mean=${st.mean.toFixed(4)} sd=${st.sd.toFixed(4)} median=${st.median} max=${st.hi} ` +
+               `mass=${st.mass.toFixed(9)} P>=19=${(CORE.geq(d, 19) * 100).toFixed(6)}% ` +
+               `P>=22=${(CORE.geq(d, 22) * 100).toFixed(6)}% P>=25=${(CORE.geq(d, 25) * 100).toFixed(6)}% ` +
+               `P>=30=${(CORE.geq(d, 30) * 100).toExponential(4)}%`);
+    }
+    out.push("editorCells=" + document.querySelectorAll("#editor input").length);
+    out.push("kpiTargetCards=" + document.querySelectorAll("#kpiTarget .kpi").length);
+    out.push("chartRects=" + document.querySelectorAll("#chart rect").length);
+    pre.textContent = "SELFTEST\n" + out.join("\n");
+    document.body.appendChild(pre);
+  }
+})();
+</script>
+</body>
+</html>
