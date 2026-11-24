@@ -187,6 +187,14 @@ tbody tr:hover td{background:rgba(255,255,255,.018)}
 .dot{display:inline-block;width:9px;height:9px;border-radius:50%;margin:0 4px 0 10px;vertical-align:middle}
 .dot.t0{background:#5aa9ff}.dot.t1{background:#3ddc97}.dot.t2{background:#a78bfa}.dot.t3{background:#f0c46a}
 .simtotal{display:flex;align-items:baseline;gap:10px;margin:6px 0 14px;padding-left:2px}
+.maxout{margin-top:12px;border:1px solid rgba(240,196,106,.18);border-radius:12px;padding:11px 13px;
+  background:linear-gradient(180deg,rgba(240,196,106,.07),rgba(240,196,106,.015))}
+.mo-top{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.mo-cell{display:flex;flex-direction:column;gap:2px;min-width:0}
+.mo-k{font-size:10.5px;color:var(--dim);letter-spacing:.02em}
+.mo-v{font-size:20px;font-weight:700;color:#ffd88c;font-variant-numeric:tabular-nums;letter-spacing:-.01em}
+.mo-x{font-size:10px;color:var(--dim)}
+#moGaps{margin:9px 0 0}
 .simtotal b{font-size:28px;font-weight:750;font-variant-numeric:tabular-nums;letter-spacing:-.01em;
   background:linear-gradient(92deg,#ffe6b0,#f0b95c 58%,#dc9b36);
   -webkit-background-clip:text;background-clip:text;color:transparent}
@@ -443,6 +451,21 @@ details[open] summary::after{content:"–"}
         <div class="sim-roll">
           <div id="simLines"><div class="muted">点「洗 1 次」开始</div></div>
           <div class="simtotal"><span class="muted">总分</span><b id="simTotal">—</b><span class="muted" id="simTotalNote"></span></div>
+          <div class="maxout" id="simMaxout">
+            <div class="mo-top">
+              <div class="mo-cell">
+                <span class="mo-k">全部拉满后</span>
+                <b class="mo-v" id="moScore">—</b>
+                <span class="mo-x" id="moGain"></span>
+              </div>
+              <div class="mo-cell">
+                <span class="mo-k">需要死龙变换 +1 券</span>
+                <b class="mo-v" id="moTickets">—</b>
+                <span class="mo-x">1 张 = 一个词条 +1 档</span>
+              </div>
+            </div>
+            <div class="chips" id="moGaps"></div>
+          </div>
         </div>
         <aside class="sim-target" id="simTargetPane">
           <div class="tbox" id="simBoxScore">
@@ -1491,6 +1514,24 @@ if (typeof globalThis !== "undefined") globalThis.CORE = CORE;
       + `<span class="slv">${lvName(l.gi, l.v)}</span>`
       + `<span class="sscore">${sc(l.s)}</span></div>`).join("");
     $("simTotal").textContent = sc(r.total);
+
+    // 全部拉满：每条按该组最高档算分，差的档位就是需要的 +1 券
+    let maxTotal = 0, tickets = 0;
+    const gaps = [];
+    for (const l of r.lines) {
+      const top = l.n - 1;
+      maxTotal += S.scores[l.gi][top];
+      const d = top - l.oi;
+      tickets += d;
+      if (d > 0) gaps.push({ gi: l.gi, d });
+    }
+    $("moScore").textContent = sc(maxTotal) + " 分";
+    $("moGain").textContent = maxTotal > r.total ? "比现在 +" + sc(maxTotal - r.total) + " 分" : "已经是满档";
+    $("moTickets").textContent = num(tickets, 0) + " 张";
+    $("moGaps").innerHTML = tickets === 0
+      ? `<span class="muted" style="font-size:11px">四条都已经在最高档</span>`
+      : gaps.map((g) => `<span class="chip">${CORE.GROUPS[g.gi].name}<em>差 ${g.d} 档</em></span>`).join("");
+
     const v = $("simVerdict");
     if (meta && meta.kind === "best") {
       v.textContent = "历史最佳";
@@ -1550,6 +1591,7 @@ if (typeof globalThis !== "undefined") globalThis.CORE = CORE;
     $("simLines").innerHTML = '<div class="muted">点「洗 1 次」开始</div>';
     $("simTotal").textContent = "—";
     $("simTotalNote").textContent = "";
+    $("moScore").textContent = "—"; $("moGain").textContent = ""; $("moTickets").textContent = "—"; $("moGaps").innerHTML = "";
     $("simStatus").textContent = "";
     const v = $("simVerdict"); v.textContent = "—"; v.className = "tag";
     renderSimStats();
