@@ -290,7 +290,7 @@ details[open] summary::after{content:"–"}
       分数按 <b>0.001 分</b>精度参与计算；分数表固定为图1 的 20 组 × 8 档（档位数值与出现概率写在代码里）。
       目标 M 与洗练次数 N 改了不会重算分布，只重算指标。<br>
       “四条不重复”有两种实现：<b>顺序不放回</b> = 抽走一条就把它的权重扣掉再抽下一条；<b>整次重抽</b> = 四条独立抽、撞车就整组重来（等价于条件分布）。
-      两者 P(≥M) 差约 6%，按能确认的机制选。
+      两者 P(≥M) 随 M 升高差异加大（如默认表 M=22 约差 4.3%、M=30 约差 13.9%），按能确认的机制选。
     </div>
   </div>
 
@@ -711,11 +711,22 @@ const CORE = (() => {
     return true;
   }
 
+  /** 组内仅保留档位 ≥ minOi 的未归一化得分分布（用于「分数 + 组合」受限精确卷积） */
+  function groupDistMin(gi, scores, minOi) {
+    const opts = GROUPS[gi].opts, p = 1 / opts.length, d = new Map();
+    const lo = Math.max(0, Math.min(minOi | 0, opts.length));
+    for (let oi = lo; oi < opts.length; oi++) {
+      const s = q(scores[gi][oi]);
+      d.set(s, (d.get(s) || 0) + p);
+    }
+    return [...d];
+  }
+
   /** 精确分布：返回 [[整数网格分, 概率], ...]，按分数升序 */
   function totalDist(scores, scheme = "sequential") {
     const per = GROUPS.map((_, gi) => groupDist(gi, scores));
     const out = new Map();
-    for (const [set, sp] of setProbs(scheme)) {
+    for (const [set, sp] of setProbsCached(scheme)) {
       let cur = [[0, 1]];
       for (const gi of set) {
         const nx = new Map();
@@ -728,6 +739,44 @@ const CORE = (() => {
       for (const [s, p] of cur) out.set(s, (out.get(s) || 0) + sp * p);
     }
     return [...out].sort((a, b) => a[0] - b[0]);
+  }
+
+  /** 「总分 ≥ m 且组合达标」的精确联合概率（受限卷积） */
+  function bothProb(scores, m, picks, scheme = "sequential") {
+    const uniq = new Map();
+    for (const c of picks || []) if (c && GROUPS[c.gi]) uniq.set(c.gi, c.oi);
+    if (!uniq.size) return geq(totalDist(scores, scheme), m);
+    const want = [...uniq.keys()];
+    const poolMode = want.length > SLOTS;
+    const perFull = poolMode ? null : GROUPS.map((_, gi) => groupDist(gi, scores));
+    const perMin = new Map();
+    for (const [gi, oi] of uniq) perMin.set(gi, groupDistMin(gi, scores, oi));
+    const targetQ = q(m);
+    let total = 0;
+    for (const [set, sp] of setProbsCached(scheme)) {
+      if (poolMode) {
+        let ok = true;
+        for (const gi of set) if (!uniq.has(gi)) { ok = false; break; }
+        if (!ok) continue;
+      } else {
+        let ok = true;
+        for (const gi of want) if (!set.includes(gi)) { ok = false; break; }
+        if (!ok) continue;
+      }
+      let cur = [[0, 1]];
+      for (const gi of set) {
+        const gd = perMin.has(gi) ? perMin.get(gi) : perFull[gi];
+        const nx = new Map();
+        for (const [a, pa] of cur) for (const [b, pb] of gd) {
+          const s = a + b;
+          nx.set(s, (nx.get(s) || 0) + pa * pb);
+        }
+        cur = [...nx];
+        if (!cur.length) break;
+      }
+      for (const [s, p] of cur) if (s >= targetQ) total += sp * p;
+    }
+    return total;
   }
 
   const geq = (dist, m) => { const t = q(m); let a = 0; for (const [s, p] of dist) if (s >= t) a += p; return a; };
@@ -762,11 +811,11 @@ const CORE = (() => {
   }
 
   const TIERS = [
-    { name: "大業績", range: "≥30 分",   lo: 30,  hi: Infinity },
-    { name: "畢業",   range: "25~29 分", lo: 25,  hi: 30 },
-    { name: "小畢業", range: "22~24 分", lo: 22,  hi: 25 },
-    { name: "暫用",   range: "19~21 分", lo: 19,  hi: 22 },
-    { name: "滾",     range: "≤18 分",   lo: -Infinity, hi: 19 },
+    { name: "大業績", range: "≥30 分",      lo: 30,  hi: Infinity },
+    { name: "畢業",   range: "25 ~ <30 分", lo: 25,  hi: 30 },
+    { name: "小畢業", range: "22 ~ <25 分", lo: 22,  hi: 25 },
+    { name: "暫用",   range: "19 ~ <22 分", lo: 19,  hi: 22 },
+    { name: "滾",     range: "<19 分",      lo: -Infinity, hi: 19 },
   ];
   const tierProbs = (dist) => TIERS.map((t) => ({
     ...t, p: geq(dist, t.lo) - (t.hi === Infinity ? 0 : geq(dist, t.hi)),
@@ -779,6 +828,8 @@ const CORE = (() => {
     return Math.ceil(Math.log(1 - conf) / Math.log1p(-p));
   }
   const expectedRolls = (p) => (p >= 1 ? 1 : p > 0 ? 1 / p : Infinity);
+  /** N 次洗练至少命中一次的概率：用 -expm1(n*log1p(-p)) 避免极小 p 下的有效数字抵消 */
+  const probAtLeastOnce = (p, n) => (p >= 1 ? 1 : p <= 0 || n <= 0 ? 0 : -Math.expm1(n * Math.log1p(-p)));
 
   /** 分数表结构校验：20 组 × 各自档位数，且每格都是有限数 */
   function validScores(s) {
@@ -791,8 +842,8 @@ const CORE = (() => {
     return true;
   }
 
-  return { GROUPS, ENHANCED, T2, TOY, SLOTS, Q, TIERS, validScores, levelRate, comboProb,
-           makeSetSampler, comboHit,
+  return { GROUPS, ENHANCED, T2, TOY, SLOTS, Q, q, TIERS, validScores, levelRate, comboProb, bothProb,
+           makeSetSampler, comboHit, probAtLeastOnce,
            presetScores, totalDist, stats, geq, leq, histogram, tierProbs, rolls, expectedRolls, toScore };
 })();
 if (typeof globalThis !== "undefined") globalThis.CORE = CORE;
@@ -885,7 +936,7 @@ if (typeof globalThis !== "undefined") globalThis.CORE = CORE;
     const p = CORE.geq(dist, m);
     const exp = CORE.expectedRolls(p);
     const med = CORE.rolls(p, 0.5), c90 = CORE.rolls(p, 0.9), c99 = CORE.rolls(p, 0.99);
-    const pN = p >= 1 ? 1 : 1 - Math.pow(1 - p, n);
+    const pN = CORE.probAtLeastOnce(p, n);
 
     $("kpiTarget").innerHTML = [
       ["单次洗练 P(总分 ≥ " + sc(m) + ")", pct(p), "分数最高 " + sc(st.hi) + " 分", "hl"],
@@ -922,7 +973,7 @@ if (typeof globalThis !== "undefined") globalThis.CORE = CORE;
     const ns = [1, 5, 10, 25, 50, 100, 200, 500, 1000, 2000, 5000, 10000];
     if (!ns.includes(n)) { ns.push(n); ns.sort((a, b) => a - b); }
     $("nTable").querySelector("tbody").innerHTML = ns.map((k) => {
-      const q = p >= 1 ? 1 : 1 - Math.pow(1 - p, k);
+      const q = CORE.probAtLeastOnce(p, k);
       const mark = k === n ? ' style="background:rgba(70,213,239,.10);font-weight:650"' : "";
       return `<tr${mark}><td>${k.toLocaleString("zh-CN")}</td><td>${pct(q)}</td><td>${pct(1 - q)}</td></tr>`;
     }).join("");
@@ -1198,7 +1249,7 @@ if (typeof globalThis !== "undefined") globalThis.CORE = CORE;
     const picks = S.combo;
     if (!picks.length) {
       hint.textContent = "还没选词条";
-      box.innerHTML = `<div class="muted" style="grid-column:1/-1">勾选上面的词条（最多 4 个），这里会给出单次命中概率和要洗多少次</div>`;
+      box.innerHTML = `<div class="muted" style="grid-column:1/-1">勾选上面的词条（4 个以内全中，5 个以上按候选池算），这里会给出单次命中概率和要洗多少次</div>`;
       const dash = `<tr><td colspan="3" class="muted" style="text-align:center">—</td></tr>`;
       $("comboTable").querySelector("tbody").innerHTML = dash;
       $("comboConf").querySelector("tbody").innerHTML = dash;
@@ -1226,8 +1277,8 @@ if (typeof globalThis !== "undefined") globalThis.CORE = CORE;
     const ns = [...new Set([1, 2, 5, 10, 25, 50, 100, 200, 500, 1000, 2000, 5000, 10000, ...extra])]
       .filter((v) => v >= 1).sort((a, b) => a - b);
     $("comboTable").querySelector("tbody").innerHTML = ns.map((n) => {
-      const at = p >= 1 ? (n === 1 ? 1 : 0) : Math.pow(1 - p, n - 1) * p;
-      const within = p >= 1 ? 1 : 1 - Math.pow(1 - p, n);
+      const at = p >= 1 ? (n === 1 ? 1 : 0) : p <= 0 ? 0 : Math.exp((n - 1) * Math.log1p(-p)) * p;
+      const within = CORE.probAtLeastOnce(p, n);
       return `<tr><td>${n.toLocaleString("zh-CN")}</td><td>${pct(at)}</td><td>${pct(within)}</td></tr>`;
     }).join("");
 
@@ -1438,7 +1489,7 @@ if (typeof globalThis !== "undefined") globalThis.CORE = CORE;
     return samplerCache.get(S.scheme);
   }
 
-  const SIM = { rolls: 0, sum: 0, best: -1, bestAt: 0, bestRoll: null, hits: 0, run: false, stop: false, last: null };
+  const SIM = { rolls: 0, sum: 0, best: -Infinity, bestAt: 0, bestRoll: null, hits: 0, run: false, stop: false, last: null };
   const rawOf = (set, oi) => ({ set: [...set], oi: [...oi] });
   const goalMode = () => $("simGoal").value;
 
@@ -1447,7 +1498,8 @@ if (typeof globalThis !== "undefined") globalThis.CORE = CORE;
       const n = CORE.GROUPS[gi].opts.length;
       return { gi, oi: oi4[k], n, v: CORE.GROUPS[gi].opts[oi4[k]], s: S.scores[gi][oi4[k]], t: tierOf(oi4[k], n) };
     });
-    return { lines, total: lines.reduce((a, l) => a + l.s, 0) };
+    const totalQ = lines.reduce((a, l) => a + CORE.q(l.s), 0);
+    return { lines, totalQ, total: CORE.toScore(totalQ) };
   }
   function randomRoll() {
     const set = getSampler()(Math.random());
@@ -1460,50 +1512,22 @@ if (typeof globalThis !== "undefined") globalThis.CORE = CORE;
   function goalHit(r) {
     const g = goalMode();
     if (g === "none") return null;
-    if (g === "score") return r.total >= S.m;
+    const scoreOk = r.totalQ >= CORE.q(S.m);
+    if (g === "score") return scoreOk;
     const comboOk = S.combo.length ? CORE.comboHit(r.lines, S.combo) : true;   // 没选词条 = 不卡组合
     if (g === "combo") return CORE.comboHit(r.lines, S.combo);
-    return r.total >= S.m && comboOk;                                          // both
+    return scoreOk && comboOk;                                                 // both
   }
 
-  /** 「分数 + 组合」联合概率：精确解要按组做受限卷积（几百 ms），这里用固定种子的蒙特卡洛（10 万次，约 10ms） */
-  let estCache = { key: "", p: 0 };
-  function estBoth(N = 100000) {
+  /** 「分数 + 组合」联合概率：受限精确卷积（带缓存） */
+  let bothCache = { key: "", p: 0 };
+  function exactBoth() {
     const key = [S.scheme, S.m,
       S.combo.map((c) => c.gi + ":" + c.oi).join(","),
       S.scores.map((r) => r.join(",")).join(";")].join("|");
-    if (estCache.key === key) return estCache.p;
-    const sampler = getSampler(), sc = S.scores, M = S.m;
-    const picks = S.combo.map((c) => [c.gi, c.oi]);
-    const pool = new Int16Array(CORE.GROUPS.length).fill(-1);
-    for (const c of S.combo) pool[c.gi] = c.oi;
-    const poolMode = picks.length > CORE.SLOTS;
-    let seed = 20261123 >>> 0;
-    const rnd = () => { seed ^= seed << 13; seed >>>= 0; seed ^= seed >> 17; seed ^= seed << 5; seed >>>= 0; return seed / 4294967296; };
-    let hit = 0;
-    for (let i = 0; i < N; i++) {
-      const set = sampler(rnd());
-      const o0 = (rnd() * 8) | 0, o1 = (rnd() * 8) | 0, o2 = (rnd() * 8) | 0, o3 = (rnd() * 8) | 0;
-      if (sc[set[0]][o0] + sc[set[1]][o1] + sc[set[2]][o2] + sc[set[3]][o3] < M) continue;
-      let ok;
-      if (!picks.length) ok = true;
-      else if (poolMode) {
-        ok = pool[set[0]] >= 0 && o0 >= pool[set[0]] && pool[set[1]] >= 0 && o1 >= pool[set[1]]
-          && pool[set[2]] >= 0 && o2 >= pool[set[2]] && pool[set[3]] >= 0 && o3 >= pool[set[3]];
-      } else {
-        ok = true;
-        for (let p = 0; p < picks.length; p++) {
-          const gi = picks[p][0], oi = picks[p][1];
-          let got = -1;
-          if (set[0] === gi) got = o0; else if (set[1] === gi) got = o1;
-          else if (set[2] === gi) got = o2; else if (set[3] === gi) got = o3;
-          if (got < oi) { ok = false; break; }
-        }
-      }
-      if (ok) hit++;
-    }
-    estCache = { key, p: hit / N };
-    return estCache.p;
+    if (bothCache.key === key) return bothCache.p;
+    bothCache = { key, p: CORE.bothProb(S.scores, S.m, S.combo, S.scheme) };
+    return bothCache.p;
   }
 
   function renderSimRoll(r, meta) {
@@ -1554,7 +1578,7 @@ if (typeof globalThis !== "undefined") globalThis.CORE = CORE;
       ["平均总分（模拟）", SIM.rolls ? avg.toFixed(3) : "—", st ? "理论 " + st.mean.toFixed(3) : "", ""],
       ["累计花费", SIM.rolls ? edTxt(SIM.rolls * yiPerRoll()) : "—",
        SIM.rolls ? "≈ " + rmbTxt(SIM.rolls * yiPerRoll() * effRate()) : "洗一次就开始记", ""],
-      ["最好总分", SIM.best < 0 ? "—" : sc(SIM.best),
+      ["最好总分", !isFinite(SIM.best) ? "—" : sc(SIM.best),
        SIM.bestAt ? "第 " + num(SIM.bestAt, 0) + " 次" + (SIM.bestRoll ? " · 点击查看" : "") : "",
        SIM.bestRoll ? "click" : ""],
       ["达标次数", g === "none" ? "—" : num(SIM.hits, 0), g === "none" ? "先选个目标" : "按当前目标统计", ""],
@@ -1587,7 +1611,7 @@ if (typeof globalThis !== "undefined") globalThis.CORE = CORE;
 
   function simReset() {
     if (SIM.run) return;
-    Object.assign(SIM, { rolls: 0, sum: 0, best: -1, bestAt: 0, bestRoll: null, hits: 0, last: null });
+    Object.assign(SIM, { rolls: 0, sum: 0, best: -Infinity, bestAt: 0, bestRoll: null, hits: 0, last: null });
     $("simLines").innerHTML = '<div class="muted">点「洗 1 次」开始</div>';
     $("simTotal").textContent = "—";
     $("simTotalNote").textContent = "";
@@ -1605,7 +1629,7 @@ if (typeof globalThis !== "undefined") globalThis.CORE = CORE;
     const pool = new Int16Array(CORE.GROUPS.length).fill(-1);
     for (const c of S.combo) pool[c.gi] = c.oi;
     const poolMode = picks.length > CORE.SLOTS;
-    const M = S.m, scores = S.scores, sampler = getSampler();
+    const Mq = CORE.q(S.m), scoresQ = S.scores.map((r) => r.map(CORE.q)), sampler = getSampler();
     const CAP = 2000000;
     const base = SIM.rolls, baseSum = SIM.sum, baseHits = SIM.hits;
     let n = 0, sum = 0, best = SIM.best, bestAt = SIM.bestAt, bestRoll = SIM.bestRoll;
@@ -1637,11 +1661,12 @@ if (typeof globalThis !== "undefined") globalThis.CORE = CORE;
           const set = sampler(Math.random());
           const o0 = (Math.random() * 8) | 0, o1 = (Math.random() * 8) | 0,
                 o2 = (Math.random() * 8) | 0, o3 = (Math.random() * 8) | 0;
-          const total = scores[set[0]][o0] + scores[set[1]][o1] + scores[set[2]][o2] + scores[set[3]][o3];
+          const totalQ = scoresQ[set[0]][o0] + scoresQ[set[1]][o1] + scoresQ[set[2]][o2] + scoresQ[set[3]][o3];
+          const total = CORE.toScore(totalQ);
           n++; sum += total;
           if (total > best) { best = total; bestAt = base + n; bestRoll = rawOf(set, [o0, o1, o2, o3]); }
           let hit;
-          if (g === "score") hit = total >= M;
+          if (g === "score") hit = totalQ >= Mq;
           else {
             let comboOk;
             if (!picks.length) comboOk = true;
@@ -1658,7 +1683,7 @@ if (typeof globalThis !== "undefined") globalThis.CORE = CORE;
                 if (got < oi) { comboOk = false; break; }
               }
             }
-            hit = g === "both" ? (comboOk && total >= M) : comboOk;
+            hit = g === "both" ? (comboOk && totalQ >= Mq) : comboOk;
           }
           if (hit) { finish(buildRoll(set, [o0, o1, o2, o3]), "hit"); return; }
           if (n >= CAP) { finish(null, "cap"); return; }
@@ -1730,9 +1755,9 @@ if (typeof globalThis !== "undefined") globalThis.CORE = CORE;
       if (!S.combo.length) {
         bits.push(`同时满足：总分 ≥ <b>${sc(S.m)}</b> 分（还没选词条，只按分数算）· 单次 ${pct(pS)} · 平均 ${num(CORE.expectedRolls(pS))} 次`);
       } else {
-        const p = estBoth();
-        bits.push(`同时满足：总分 ≥ <b>${sc(S.m)}</b> 分 + 组合达标 · 模拟估计 ${pct(p)} · 平均 ${num(CORE.expectedRolls(p))} 次`);
-        if (!(p > 0)) { bits.push('<span class="warn">这分数下该组合几乎不可能</span>'); bad = true; }
+        const p = exactBoth();
+        bits.push(`同时满足：总分 ≥ <b>${sc(S.m)}</b> 分 + 组合达标 · 精确概率 ${pct(p)} · 平均 ${num(CORE.expectedRolls(p))} 次`);
+        if (!(p > 0)) { bits.push('<span class="warn">这分数下该组合不可能达成</span>'); bad = true; }
       }
     }
     $("simAuto").disabled = bad;
